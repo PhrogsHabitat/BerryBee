@@ -25,6 +25,7 @@ public class TeleOp extends PurpleOpMode
 	private Follower follower;
 
 	private Vaccum vaccum;
+	private Explosher explosher;
 
 
 	@Override
@@ -43,6 +44,7 @@ public class TeleOp extends PurpleOpMode
 		// LimeUtil.setPipeline(0);
 
 		vaccum = new Vaccum(hardwareMap);
+		explosher = new Explosher(hardwareMap);
 
 		DebugUtil.setTelemetry(telemetry);
 	}
@@ -56,9 +58,11 @@ public class TeleOp extends PurpleOpMode
 		PurpleMemory.Instance.update();
 
 		vaccum.update();
+		explosher.update();
 
 		updateDrive();
 		updateVaccum();
+		updateExplosher();
 
 		updateTelemetry();
 		DebugUtil.update();
@@ -69,6 +73,7 @@ public class TeleOp extends PurpleOpMode
 	{
 		// explosher.stop();
 		   vaccum.stop();
+		   explosher.stop();
 	}
 
 	private void updateDrive ()
@@ -91,6 +96,13 @@ public class TeleOp extends PurpleOpMode
 		{
 			vaccum.setPower(-1.0);
 		}
+	}
+
+	private void updateExplosher()
+	{
+		explosher.setRegressionEnabled(false);
+
+		explosher.setRPM(4500);
 	}
 
 	private void updateTelemetry ()

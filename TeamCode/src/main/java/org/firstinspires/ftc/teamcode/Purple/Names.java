@@ -9,6 +9,8 @@ public final class Names
 	public static final String BACKLEFT = "BL";
 
 	public static final String EXPLOSHER = "EXPLO";
+	public static final String EXPLOSHER2 = "EXPLO2";
+
 
 	public static final String INTAKE = "FE";
 
