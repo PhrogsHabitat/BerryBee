@@ -45,21 +45,21 @@ public class OdometryPanelsTuner extends OpMode
 		Panels.initPedroField();
 
 		persist = new Persist(hardwareMap);
-		follower = org.firstinspires.ftc.teamcode.pedroPathing.Constants.createFollower(hardwareMap);
+		follower = org.firstinspires.ftc.teamcode.pedro.Constants.createFollower(hardwareMap);
 		follower.setStartingPose(START_POSE);
 
 		forwardPodX = readPersistedDouble(
 				KEY_FORWARD_POD_X,
-				org.firstinspires.ftc.teamcode.pedroPathing.Constants.localizerConstants.strafePodX);
+				org.firstinspires.ftc.teamcode.pedro.Constants.localizerConstants.strafePodX);
 		strafePodY = readPersistedDouble(
 				KEY_STRAFE_POD_Y,
-				org.firstinspires.ftc.teamcode.pedroPathing.Constants.localizerConstants.forwardPodY);
+				org.firstinspires.ftc.teamcode.pedro.Constants.localizerConstants.forwardPodY);
 		forwardDirection = readPersistedDirection(
 				KEY_FORWARD_DIR,
-				org.firstinspires.ftc.teamcode.pedroPathing.Constants.localizerConstants.forwardEncoderDirection);
+				org.firstinspires.ftc.teamcode.pedro.Constants.localizerConstants.forwardEncoderDirection);
 		strafeDirection = readPersistedDirection(
 				KEY_STRAFE_DIR,
-				org.firstinspires.ftc.teamcode.pedroPathing.Constants.localizerConstants.strafeEncoderDirection);
+				org.firstinspires.ftc.teamcode.pedro.Constants.localizerConstants.strafeEncoderDirection);
 
 		applyPinpointSettings();
 		follower.update();

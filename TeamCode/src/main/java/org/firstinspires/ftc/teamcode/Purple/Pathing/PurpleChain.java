@@ -22,7 +22,6 @@ public class PurpleChain
 	 */
 	public PurpleChain (PurplePath... paths)
 	{
-
 		if (paths == null || paths.length == 0)
 		{
 			this.paths = new ArrayList<>();
@@ -35,14 +34,12 @@ public class PurpleChain
 	/** Returns an unmodifiable list of paths. */
 	public List<PurplePath> getPaths ()
 	{
-
 		return Collections.unmodifiableList(paths);
 	}
 
 	/** Add a path to the end of the chain. */
 	public PurpleChain add (PurplePath path)
 	{
-
 		this.paths.add(path);
 		return this;
 	}
@@ -55,7 +52,6 @@ public class PurpleChain
 	 */
 	public PurpleChain onComplete (Runnable onComplete)
 	{
-
 		this.onComplete = onComplete;
 		return this;
 	}
@@ -63,7 +59,6 @@ public class PurpleChain
 	/** Internal: run chain-level onComplete if present. */
 	public void runOnComplete ()
 	{
-
 		if (onComplete != null)
 		{
 			try

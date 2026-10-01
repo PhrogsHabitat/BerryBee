@@ -2,7 +2,7 @@ package org.firstinspires.ftc.teamcode.Purple.Components.Explosher;
 
 import com.arcrobotics.ftclib.hardware.motors.Motor;
 import com.bylazar.configurables.annotations.Configurable;
-import com.pedropathing.geometry.Pose;
+import com.pedropathing.math.Pose;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import org.firstinspires.ftc.teamcode.Purple.Components.Motors.MotorConfig;
@@ -290,8 +290,8 @@ public class Explosher
 			return null;
 		}
 
-		double deltaX = aimX - pose.getX();
-		double deltaY = aimY - pose.getY();
+		double deltaX = aimX - pose.x();
+		double deltaY = aimY - pose.y();
 		return Math.hypot(deltaX, deltaY);
 	}
 

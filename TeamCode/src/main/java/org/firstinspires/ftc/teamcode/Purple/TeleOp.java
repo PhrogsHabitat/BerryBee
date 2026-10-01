@@ -2,14 +2,12 @@ package org.firstinspires.ftc.teamcode.Purple;
 
 import com.bylazar.configurables.annotations.Configurable;
 import com.pedropathing.follower.Follower;
-import com.pedropathing.geometry.Pose;
+import com.pedropathing.math.Pose;
 
 import org.firstinspires.ftc.teamcode.Purple.Components.Explosher.Explosher;
-import org.firstinspires.ftc.teamcode.Purple.Components.Lime.LimeUtil;
 import org.firstinspires.ftc.teamcode.Purple.Components.OpMode.PurpleOpMode;
 import org.firstinspires.ftc.teamcode.Purple.Components.Vaccum.Vaccum;
 import org.firstinspires.ftc.teamcode.Purple.Memory.PurpleMemory;
-import org.firstinspires.ftc.teamcode.Purple.Utils.AutoRotateController;
 import org.firstinspires.ftc.teamcode.Purple.Utils.DebugUtil;
 
 @com.qualcomm.robotcore.eventloop.opmode.TeleOp(name = "PurpleTeleOp", group = "Purple")
@@ -27,21 +25,20 @@ public class TeleOp extends PurpleOpMode
 	private Vaccum vaccum;
 	private Explosher explosher;
 
-
 	@Override
-	public void create ()
+	public void create()
 	{
 		driver1 = new Controls(gamepad1);
 		driver2 = new Controls(gamepad2);
 
-		follower = org.firstinspires.ftc.teamcode.pedroPathing.Constants.createFollower(hardwareMap);
-		follower.setStartingPose(startingPose == null ? DEFAULT_TELEOP_START_POSE : startingPose);
+		// PedroPathing 3.0 Follower creation.
+		follower = org.firstinspires.ftc.teamcode.pedro.Constants.create(hardwareMap);
+
+		// Pedro 3 uses setPose() to initialize the localizer pose.
+		follower.setPose(startingPose == null ? DEFAULT_TELEOP_START_POSE : startingPose);
 		follower.update();
-		follower.startTeleopDrive(true);
 
 		PurpleMemory.initialize(hardwareMap, follower);
-		//  LimeUtil.start(hardwareMap, 60);
-		// LimeUtil.setPipeline(0);
 
 		vaccum = new Vaccum(hardwareMap);
 		explosher = new Explosher(hardwareMap);
@@ -50,11 +47,14 @@ public class TeleOp extends PurpleOpMode
 	}
 
 	@Override
-	public void update ()
+	public void update()
 	{
 		driver1.update();
 		driver2.update();
+
+		// Pedro must be updated every loop so localization and drivetrain control run.
 		follower.update();
+
 		PurpleMemory.Instance.update();
 
 		vaccum.update();
@@ -69,25 +69,24 @@ public class TeleOp extends PurpleOpMode
 	}
 
 	@Override
-	public void destroy ()
+	public void destroy()
 	{
-		// explosher.stop();
-		   vaccum.stop();
-		   explosher.stop();
+		vaccum.stop();
+		explosher.stop();
 	}
 
-	private void updateDrive ()
+	private void updateDrive()
 	{
 		double forward = -gamepad1.left_stick_y * Constants.DRIVE_POWER_SCALE;
 		double strafe = -gamepad1.left_stick_x * Constants.DRIVE_POWER_SCALE;
 		double turn = -gamepad1.right_stick_x * Constants.DRIVE_POWER_SCALE;
 
-		follower.setTeleOpDrive(forward, strafe, turn, false);
+		// PedroPathing 3.0 manual TeleOp API.
+		follower.manual(forward, strafe, turn);
 	}
 
 	private void updateVaccum()
 	{
-		// Basic controls for the vaccum, X intake, Y outtake
 		if (driver2.isPressed("x"))
 		{
 			vaccum.setPower(1.0);
@@ -101,13 +100,13 @@ public class TeleOp extends PurpleOpMode
 	private void updateExplosher()
 	{
 		explosher.setRegressionEnabled(false);
-
 		explosher.setRPM(4500);
 	}
 
-	private void updateTelemetry ()
+	private void updateTelemetry()
 	{
-		Pose pose = follower.getPose();
+		// Pedro 3 uses pose() for the current localized Pose.
+		Pose pose = follower.pose();
 
 		DebugUtil.logAdd("[FOLLOWER] POSE: " + pose);
 	}
