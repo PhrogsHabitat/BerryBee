@@ -15,13 +15,16 @@ import org.firstinspires.ftc.teamcode.Purple.Utils.DebugUtil;
 public class TeleOp extends PurpleOpMode
 {
 	private static final Pose DEFAULT_TELEOP_START_POSE = new Pose(72, 72, Math.toRadians(0.0));
-
 	public static Pose startingPose;
+	// Pollen 3000
+	// Necter 3300
+
+	public double swagRPM = 2500;
 
 	private Controls driver1;
 	private Controls driver2;
-	private Follower follower;
 
+	private Follower follower;
 	private Vaccum vaccum;
 	private Explosher explosher;
 
@@ -95,17 +98,29 @@ public class TeleOp extends PurpleOpMode
 		{
 			vaccum.setPower(-1.0);
 		}
+		else
+		{
+			vaccum.setPower(0.0);
+		}
 	}
 
 	private void updateExplosher()
 	{
 		explosher.setRegressionEnabled(false);
-		explosher.setRPM(4500);
+		explosher.setRPM(swagRPM);
+
+		if (driver1.justPressed("dpad_up"))
+		{
+			swagRPM += 100;
+		}
+		if (driver1.justPressed("dpad_down"))
+		{
+			swagRPM -= 100;
+		}
 	}
 
 	private void updateTelemetry()
 	{
-		// Pedro 3 uses pose() for the current localized Pose.
 		Pose pose = follower.pose();
 
 		DebugUtil.logAdd("[FOLLOWER] POSE: " + pose);

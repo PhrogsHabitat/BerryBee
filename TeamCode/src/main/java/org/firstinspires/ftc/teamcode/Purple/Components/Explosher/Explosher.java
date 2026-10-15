@@ -6,8 +6,6 @@ import com.pedropathing.math.Pose;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import org.firstinspires.ftc.teamcode.Purple.Components.Motors.MotorConfig;
-import org.firstinspires.ftc.teamcode.Purple.Components.Servos.ServoConfig;
-import org.firstinspires.ftc.teamcode.Purple.Constants;
 import org.firstinspires.ftc.teamcode.Purple.Memory.PurpleMemory;
 import org.firstinspires.ftc.teamcode.Purple.Names;
 import org.firstinspires.ftc.teamcode.Purple.Utils.DebugUtil;

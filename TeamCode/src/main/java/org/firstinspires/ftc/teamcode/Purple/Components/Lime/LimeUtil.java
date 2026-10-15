@@ -235,7 +235,7 @@ public final class LimeUtil
 	 *
 	 * @return Pose if a valid AprilTag is detected, otherwise null.
 	 */
-	public static com.pedropathing.geometry.Pose getRobotPose ()
+	public static com.pedropathing.math.Pose getRobotPose ()
 	{
 
 		LLResult result = getResult();
@@ -251,7 +251,7 @@ public final class LimeUtil
 		double xInches = botpose.getPosition().x * METERS_TO_INCHES;
 		double yInches = botpose.getPosition().y * METERS_TO_INCHES;
 		double headingRad = botpose.getOrientation().getYaw(); // returns radians
-		return new com.pedropathing.geometry.Pose(xInches, yInches, headingRad);
+		return new com.pedropathing.math.Pose(xInches, yInches, headingRad);
 	}
 
 	/**

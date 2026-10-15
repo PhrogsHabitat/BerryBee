@@ -12,16 +12,11 @@ public class Vaccum
 
 	public final MotorConfig intakeMotor;
 
-	public final MotorConfig midtakeMotor;
-
 	private double currentPower = 0.0;
 
 	public Vaccum (HardwareMap hardwareMap)
 	{
 		intakeMotor = new MotorConfig.Builder(hardwareMap, Names.INTAKE, MotorConfig.Position.INTAKE)
-				.disableVelocityControl()
-				.build();
-		midtakeMotor = new MotorConfig.Builder(hardwareMap, Names.MIDTAKE, MotorConfig.Position.MIDTAKE)
 				.disableVelocityControl()
 				.build();
 
@@ -46,7 +41,6 @@ public class Vaccum
 	{
 		currentPower = Math.max(-1.0, Math.min(1.0, power));
 		intakeMotor.setPower(currentPower);
-		midtakeMotor.setPower(currentPower);
 	}
 
 	public double getPower ()
@@ -62,6 +56,9 @@ public class Vaccum
 	public double getIntakeCurrentRPM ()
 	{
 		return intakeMotor.getCurrentRPM();
-		return midtakeMotor.getCurrentRPM();
 	}
+//	public double getMidtakeCurrentRPM ()
+//	{
+//		return midtakeMotor.getCurrentRPM();
+//	}
 }

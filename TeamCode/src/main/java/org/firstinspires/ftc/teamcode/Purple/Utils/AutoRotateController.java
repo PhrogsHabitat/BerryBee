@@ -3,7 +3,7 @@ package org.firstinspires.ftc.teamcode.Purple.Utils;
 import com.bylazar.configurables.PanelsConfigurables;
 import com.bylazar.configurables.annotations.Configurable;
 import com.bylazar.configurables.annotations.IgnoreConfigurable;
-import com.pedropathing.geometry.Pose;
+import com.pedropathing.math.Pose;
 
 @Configurable
 public class AutoRotateController
@@ -53,7 +53,7 @@ public class AutoRotateController
 		}
 
 		double targetHeadingDeg = getTargetHeadingDeg(pose);
-		double headingErrorDeg = normalizeDegrees(targetHeadingDeg - Math.toDegrees(pose.getHeading()));
+		double headingErrorDeg = normalizeDegrees(targetHeadingDeg - Math.toDegrees(pose.heading()));
 		double dt = getDtSeconds();
 
 		lastTargetHeadingDeg = targetHeadingDeg;
@@ -131,8 +131,8 @@ public class AutoRotateController
 
 	private double getTargetHeadingDeg (Pose pose)
 	{
-		double deltaX = aimX - pose.getX();
-		double deltaY = aimY - pose.getY();
+		double deltaX = aimX - pose.x();
+		double deltaY = aimY - pose.y();
 		return normalizeDegrees(Math.toDegrees(Math.atan2(deltaY, deltaX)) + shooterOffsetDeg);
 	}
 

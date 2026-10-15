@@ -4,7 +4,6 @@ import com.bylazar.telemetry.TelemetryManager;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
-import org.firstinspires.ftc.teamcode.Panels;
 import org.firstinspires.ftc.teamcode.Purple.Components.Motors.MotorConfig;
 import org.firstinspires.ftc.teamcode.Purple.Controls;
 import org.firstinspires.ftc.teamcode.Purple.Names;
@@ -26,7 +25,6 @@ public class MotorTestTool extends OpMode
     @Override
     public void init ()
     {
-        panelsTelemetry = Panels.telemetry();
 
         motors[0] = new MotorConfig.Builder(hardwareMap, Names.FRONTLEFT, MotorConfig.Position.FRONT_LEFT, 112, 6000)
                 .disableVelocityControl().build();
