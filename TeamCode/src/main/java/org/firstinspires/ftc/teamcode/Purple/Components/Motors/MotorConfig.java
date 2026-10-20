@@ -1,13 +1,10 @@
+
 package org.firstinspires.ftc.teamcode.Purple.Components.Motors;
 
 import com.arcrobotics.ftclib.hardware.motors.Motor;
 import com.arcrobotics.ftclib.hardware.motors.MotorEx;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
-/**
- * Simplified motor configuration class for basic power, velocity, and position control
- * Uses MotorEx for all motors to ensure consistent velocity measurement
- */
 public final class MotorConfig
 {
     private final String name;
@@ -15,209 +12,165 @@ public final class MotorConfig
     private final MotorEx motor;
     private final double maxRPM;
     private final double cpr;
-    private double velocitySign = 1.0;
 
+    private double velocitySign = 1.0;
     private ControlMode controlMode = ControlMode.RAW_POWER;
     private double targetRPM = 0.0;
     private double targetPower = 0.0;
 
     private MotorConfig(Builder builder)
     {
+        if (builder.hardwareMap == null)
+        {
+            throw new IllegalArgumentException("HardwareMap cannot be null.");
+        }
+
+        if (builder.name == null || builder.name.trim().isEmpty())
+        {
+            throw new IllegalArgumentException("Motor name cannot be empty.");
+        }
+
+        if (!Double.isFinite(builder.cpr) || builder.cpr < 0.0
+                || !Double.isFinite(builder.maxRPM) || builder.maxRPM < 0.0)
+        {
+            throw new IllegalArgumentException("CPR and max RPM must be finite and nonnegative.");
+        }
+
+        if ((builder.cpr > 0.0) != (builder.maxRPM > 0.0))
+        {
+            throw new IllegalArgumentException(
+                    "CPR and max RPM must both be positive for velocity control.");
+        }
+
         name = builder.name;
         position = builder.position;
-        maxRPM = builder.maxRPM;
         cpr = builder.cpr;
+        maxRPM = builder.maxRPM;
 
-        if (builder.cpr != 0 && builder.maxRPM != 0)
-        {
-            motor = new MotorEx(builder.hardwareMap, builder.name, builder.cpr, builder.maxRPM);
-        }
-        else
-        {
-            motor = new MotorEx(builder.hardwareMap, builder.name);
-        }
+        motor = cpr > 0.0
+                ? new MotorEx(builder.hardwareMap, name, cpr, maxRPM)
+                : new MotorEx(builder.hardwareMap, name);
 
         motor.setInverted(builder.inverted);
         motor.setZeroPowerBehavior(builder.zeroPowerBehavior);
 
-        if (builder.positionCoefficient > 0)
+        if (builder.positionCoefficient > 0.0)
         {
             motor.setPositionCoefficient(builder.positionCoefficient);
         }
 
-        if (builder.positionTolerance > 0)
+        if (builder.positionTolerance >= 0.0)
         {
             motor.setPositionTolerance(builder.positionTolerance);
         }
 
-        if (builder.distancePerPulse > 0 && builder.cpr > 0)
+        if (builder.distancePerPulse > 0.0 && cpr > 0.0)
         {
             motor.setDistancePerPulse(builder.distancePerPulse);
         }
 
-        setControlMode(builder.velocityEnabled ? ControlMode.VELOCITY_CONTROL : ControlMode.RAW_POWER);
+        if (builder.velocityGainsConfigured)
+        {
+            motor.setVeloCoefficients(
+                    builder.velocityKp,
+                    builder.velocityKi,
+                    builder.velocityKd
+            );
+        }
+
+        if (builder.feedforwardConfigured)
+        {
+            motor.setFeedforwardCoefficients(
+                    builder.feedforwardKs,
+                    builder.feedforwardKv
+            );
+        }
+
+        setControlMode(
+                builder.velocityEnabled && cpr > 0.0 && maxRPM > 0.0
+                        ? ControlMode.VELOCITY_CONTROL
+                        : ControlMode.RAW_POWER
+        );
     }
 
-    /**
-     * Converts RPM to ticks per second
-     *
-     * @param rpm Revolutions per minute
-     * @return Ticks per second
-     */
     private double rpmToTps(double rpm)
     {
-        if (cpr == 0)
-        {
-            return 0.0;
-        }
-
-        return rpm * (cpr / 60.0);
+        return cpr > 0.0 ? rpm * cpr / 60.0 : 0.0;
     }
 
-    /**
-     * Converts ticks per second to RPM
-     *
-     * @param tps Ticks per second
-     * @return Revolutions per minute
-     */
     private double tpsToRpm(double tps)
     {
-        if (cpr == 0)
-        {
-            return 0.0;
-        }
-
-        return tps * (60.0 / cpr);
+        return cpr > 0.0 ? tps * 60.0 / cpr : 0.0;
     }
 
-    /**
-     * Gets the current target RPM
-     *
-     * @return Target RPM value
-     */
-    public double getTargetRPM ()
+    private double applyVelocityDirection(double value)
     {
-
-        return targetRPM;
+        return value * velocitySign;
     }
 
-    /**
-     * Sets target RPM using velocity control or falls back to power control
-     *
-     * @param rpm The target RPM to set
-     */
-    public void setTargetRPM (double rpm)
+    private static double clamp(double value, double min, double max)
     {
+        return Math.max(min, Math.min(max, value));
+    }
 
-        this.targetRPM = rpm;
-
-        if (controlMode == ControlMode.VELOCITY_CONTROL && maxRPM > 0)
+    private static void requireFinite(double value, String label)
+    {
+        if (!Double.isFinite(value))
         {
-            // Convert RPM to ticks per second and set velocity
-            double tps = applyVelocityDirection(rpmToTps(rpm));
-            motor.setVelocity(tps);
-        } else
-        {
-            // Fallback to power control
-            double power = maxRPM > 0 ? rpm / maxRPM : Math.min(1.0, rpm / 1000.0);
-            power = Math.max(-1.0, Math.min(1.0, power));
-            setPower(power);
+            throw new IllegalArgumentException(label + " must be finite.");
         }
     }
 
-    /**
-     * Gets the current motor power
-     *
-     * @return Current power value between -1.0 and 1.0
-     */
-    public double getPower ()
+    public String getName()
     {
-
-        return motor.get();
+        return name;
     }
 
-    /**
-     * Sets raw power to the motor (-1.0 to 1.0)
-     *
-     * @param power Power value between -1.0 and 1.0
-     */
-    public void setPower (double power)
+    public Position getPosition()
     {
-
-        targetPower = power;
-        motor.set(power);
-        if (controlMode != ControlMode.POSITION_CONTROL)
-        {
-            this.targetRPM = power * maxRPM;
-        }
+        return position;
     }
 
-    /**
-     * Gets the current RPM from motor velocity
-     *
-     * @return Current RPM value
-     */
-    public double getCurrentRPM ()
+    public double getMaxRPM()
     {
-        double tps = getVelocity();
-        return tpsToRpm(tps);
+        return maxRPM;
     }
 
-    /**
-     * Gets the current encoder velocity in ticks per second.
-     *
-     * @return Current velocity corrected for encoder direction.
-     */
-    public double getVelocity ()
+    public double getCPR()
     {
-        return applyVelocityDirection(motor.getVelocity());
+        return cpr;
     }
 
-    /**
-     * Reverses the encoder velocity frame without changing motor power direction.
-     * This is useful when a shooter spins the right way on positive power but the
-     * encoder reports negative velocity for that same motion.
-     *
-     * @param reversed True to flip reported and commanded velocity sign.
-     */
-    public void setVelocityDirectionReversed (boolean reversed)
+    public ControlMode getControlMode()
     {
-        velocitySign = reversed ? -1.0 : 1.0;
-    }
-
-    public boolean isVelocityDirectionReversed ()
-    {
-        return velocitySign < 0.0;
-    }
-
-    /**
-     * Gets the current control mode
-     *
-     * @return Current control mode
-     */
-    public ControlMode getControlMode ()
-    {
-
         return controlMode;
     }
 
-    /**
-     * Sets the control mode for the motor
-     *
-     * @param mode Control mode to set
-     */
-    public void setControlMode (ControlMode mode)
+    public void setControlMode(ControlMode mode)
     {
+        if (mode == null)
+        {
+            throw new IllegalArgumentException("Control mode cannot be null.");
+        }
 
-        this.controlMode = mode;
+        if (mode == ControlMode.VELOCITY_CONTROL && (cpr <= 0.0 || maxRPM <= 0.0))
+        {
+            throw new IllegalStateException(
+                    "Velocity control requires positive CPR and max RPM.");
+        }
+
+        controlMode = mode;
+
         switch (mode)
         {
             case VELOCITY_CONTROL:
                 motor.setRunMode(Motor.RunMode.VelocityControl);
                 break;
+
             case POSITION_CONTROL:
                 motor.setRunMode(Motor.RunMode.PositionControl);
                 break;
+
             case RAW_POWER:
             default:
                 motor.setRunMode(Motor.RunMode.RawPower);
@@ -225,253 +178,226 @@ public final class MotorConfig
         }
     }
 
-    // ==================== POSITION CONTROL METHODS ====================
-
-    /**
-     * Gets the current position coefficient
-     *
-     * @return Current position coefficient value
-     */
-    public double getPositionCoefficient ()
+    public double getTargetRPM()
     {
+        return targetRPM;
+    }
 
+    public void setTargetRPM(double rpm)
+    {
+        requireFinite(rpm, "Target RPM");
+
+        if (controlMode != ControlMode.VELOCITY_CONTROL)
+        {
+            if (cpr <= 0.0 || maxRPM <= 0.0)
+            {
+                throw new IllegalStateException(
+                        "RPM commands require configured CPR and max RPM.");
+            }
+
+            setControlMode(ControlMode.VELOCITY_CONTROL);
+        }
+
+        targetRPM = clamp(rpm, -maxRPM, maxRPM);
+
+        double targetTps = applyVelocityDirection(rpmToTps(targetRPM));
+
+        // FTCLib VelocityControl uses set() to run its own controller.
+        // Do not use setVelocity() here; that bypasses this control path.
+        motor.set(targetTps);
+    }
+
+    public double getCurrentRPM()
+    {
+        return tpsToRpm(getVelocity());
+    }
+
+    public double getVelocity()
+    {
+        return applyVelocityDirection(motor.getVelocity());
+    }
+
+    public void setVelocityDirectionReversed(boolean reversed)
+    {
+        velocitySign = reversed ? -1.0 : 1.0;
+    }
+
+    public boolean isVelocityDirectionReversed()
+    {
+        return velocitySign < 0.0;
+    }
+
+    public double getPower()
+    {
+        return motor.get();
+    }
+
+    public void setPower(double power)
+    {
+        requireFinite(power, "Power");
+
+        targetPower = clamp(power, -1.0, 1.0);
+
+        if (controlMode != ControlMode.RAW_POWER)
+        {
+            setControlMode(ControlMode.RAW_POWER);
+        }
+
+        targetRPM = maxRPM > 0.0 ? targetPower * maxRPM : 0.0;
+        motor.set(targetPower);
+    }
+
+    public double getPositionCoefficient()
+    {
         return motor.getPositionCoefficient();
     }
 
-    /**
-     * Sets the position coefficient (kP) for position control
-     *
-     * @param coefficient Position coefficient value
-     */
-    public void setPositionCoefficient (double coefficient)
+    public void setPositionCoefficient(double coefficient)
     {
+        requireFinite(coefficient, "Position coefficient");
+
+        if (coefficient < 0.0)
+        {
+            throw new IllegalArgumentException(
+                    "Position coefficient cannot be negative.");
+        }
 
         motor.setPositionCoefficient(coefficient);
     }
 
-    /**
-     * Sets the target position in encoder ticks
-     *
-     * @param target Desired position in ticks
-     */
-    public void setTargetPosition (int target)
+    public void setTargetPosition(int target)
     {
-
         motor.setTargetPosition(target);
     }
 
-    /**
-     * Sets the position tolerance in encoder ticks
-     *
-     * @param tolerance Allowed error in ticks
-     */
-    public void setPositionTolerance (double tolerance)
+    public void setPositionTolerance(double tolerance)
     {
+        requireFinite(tolerance, "Position tolerance");
+
+        if (tolerance < 0.0)
+        {
+            throw new IllegalArgumentException(
+                    "Position tolerance cannot be negative.");
+        }
 
         motor.setPositionTolerance(tolerance);
     }
 
-    /**
-     * Checks if the motor is at its target position
-     *
-     * @return true if within tolerance of target position
-     */
-    public boolean atTargetPosition ()
+    public boolean atTargetPosition()
     {
-
         return motor.atTargetPosition();
     }
 
-    /**
-     * Gets the current encoder position
-     *
-     * @return Current position in ticks
-     */
-    public int getCurrentPosition ()
+    public int getCurrentPosition()
     {
-
         return motor.getCurrentPosition();
     }
 
-    /**
-     * Resets the encoder position to zero
-     */
-    public void resetEncoder ()
+    public void resetEncoder()
     {
-
         motor.resetEncoder();
     }
 
-    /**
-     * Sets the distance traveled per encoder pulse (in units of your choice)
-     * This enables distance-based position control
-     *
-     * @param distancePerPulse Distance traveled per encoder tick
-     */
-    public void setDistancePerPulse (double distancePerPulse)
+    public void setDistancePerPulse(double distancePerPulse)
     {
+        requireFinite(distancePerPulse, "Distance per pulse");
+
+        if (distancePerPulse <= 0.0)
+        {
+            throw new IllegalArgumentException(
+                    "Distance per pulse must be positive.");
+        }
+
+        if (cpr <= 0.0)
+        {
+            throw new IllegalStateException(
+                    "Distance per pulse requires configured CPR.");
+        }
 
         motor.setDistancePerPulse(distancePerPulse);
     }
 
-    /**
-     * Sets a target distance to travel
-     * Requires distancePerPulse to be configured first
-     *
-     * @param distance Target distance to travel
-     */
-    public void setTargetDistance (double distance)
+    public void setTargetDistance(double distance)
     {
-
+        requireFinite(distance, "Target distance");
         motor.setTargetDistance(distance);
     }
 
-    /**
-     * Gets the current distance traveled
-     *
-     * @return Current distance traveled
-     */
-    public double getDistance ()
+    public double getDistance()
     {
-
         return motor.getDistance();
     }
 
-    /**
-     * Runs the motor to a specific position with given power
-     * This method must be called in a control loop when using position control
-     *
-     * @param targetPosition Target position in encoder ticks
-     * @param power          Power to apply (0.0 to 1.0)
-     */
-    public void runToPosition (int targetPosition, double power)
+    public void runToPosition(int targetPosition, double power)
     {
+        requireFinite(power, "Position power");
 
-        if (getControlMode() != ControlMode.POSITION_CONTROL)
+        if (controlMode != ControlMode.POSITION_CONTROL)
         {
             setControlMode(ControlMode.POSITION_CONTROL);
         }
 
+        targetPower = clamp(Math.abs(power), 0.0, 1.0);
         setTargetPosition(targetPosition);
-        setPower(power);
+        motor.set(targetPower);
     }
 
-    /**
-     * Runs the motor to a specific distance with given power
-     * This method must be called in a control loop when using position control
-     *
-     * @param targetDistance Target distance to travel
-     * @param power          Power to apply (0.0 to 1.0)
-     */
-    public void runToDistance (double targetDistance, double power)
+    public void runToDistance(double targetDistance, double power)
     {
+        requireFinite(power, "Position power");
 
-        if (getControlMode() != ControlMode.POSITION_CONTROL)
+        if (controlMode != ControlMode.POSITION_CONTROL)
         {
             setControlMode(ControlMode.POSITION_CONTROL);
         }
 
+        targetPower = clamp(Math.abs(power), 0.0, 1.0);
         setTargetDistance(targetDistance);
-        setPower(power);
+        motor.set(targetPower);
     }
 
-    /**
-     * Gets the motor name
-     *
-     * @return Motor name
-     */
-    public String getName ()
+    public void stop()
     {
-
-        return name;
-    }
-
-    /**
-     * Gets the motor position
-     *
-     * @return Motor position
-     */
-    public Position getPosition ()
-    {
-
-        return position;
-    }
-
-    /**
-     * Stops the motor
-     */
-    public void stop ()
-    {
-
         motor.stopMotor();
-        targetRPM = 0;
-        targetPower = 0;
+        targetRPM = 0.0;
+        targetPower = 0.0;
     }
 
-    /**
-     * Gets the maximum RPM capability
-     *
-     * @return Maximum RPM value
-     */
-    public double getMaxRPM ()
+    public void update()
     {
-
-        return maxRPM;
-    }
-
-    /**
-     * Gets the counts per revolution (CPR)
-     *
-     * @return CPR value
-     */
-    public double getCPR ()
-    {
-
-        return cpr;
-    }
-
-    /**
-     * Updates motor state - call in main loop for velocity and position control
-     */
-    public void update ()
-    {
-        // For position control, we need to keep calling set() with power
+        // FTCLib manages velocity control internally through set().
+        // Do not repeatedly overwrite velocity commands here.
         if (controlMode == ControlMode.POSITION_CONTROL)
         {
-            if (!atTargetPosition())
+            if (atTargetPosition())
             {
-                motor.set(targetPower);
-            } else
-            {
-                // Stop when at target
                 motor.set(0.0);
             }
+            else
+            {
+                motor.set(targetPower);
+            }
         }
-        // MotorEx handles velocity control updates internally
     }
-
-    private double applyVelocityDirection (double value)
-    {
-        return value * velocitySign;
-    }
-
-    // ==================== ENUMS ====================
 
     public enum Position
     {
-        FRONT_LEFT, FRONT_RIGHT, BACK_LEFT, BACK_RIGHT, EXPLOSHER, INTAKE, MIDTAKE
+        FRONT_LEFT,
+        FRONT_RIGHT,
+        BACK_LEFT,
+        BACK_RIGHT,
+        EXPLOSHER,
+        INTAKE,
+        MIDTAKE
     }
 
     public enum ControlMode
     {
-        RAW_POWER, VELOCITY_CONTROL, POSITION_CONTROL
+        RAW_POWER,
+        VELOCITY_CONTROL,
+        POSITION_CONTROL
     }
 
-    // ==================== BUILDER ====================
-
-    /**
-     * Builder class for MotorConfig
-     */
     public static class Builder
     {
         private final HardwareMap hardwareMap;
@@ -481,24 +407,31 @@ public final class MotorConfig
         private final double cpr;
 
         private boolean inverted = false;
-        private Motor.ZeroPowerBehavior zeroPowerBehavior = Motor.ZeroPowerBehavior.BRAKE;
+        private Motor.ZeroPowerBehavior zeroPowerBehavior =
+                Motor.ZeroPowerBehavior.BRAKE;
+
         private boolean velocityEnabled = true;
-        private double positionCoefficient = 0.05; // Default kP for position control
-        private double positionTolerance = 13.6;   // Default tolerance in ticks
-        private double distancePerPulse = 0;       // Default: no distance per pulse configured
 
-        /**
-         * Creates a new MotorConfig builder with CPR and max RPM
-         *
-         * @param hw       Hardware map
-         * @param name     Motor name
-         * @param position Motor position
-         * @param cpr      Counts per revolution
-         * @param maxRPM   Maximum RPM for velocity control
-         */
-        public Builder (HardwareMap hw, String name, Position position, double cpr, double maxRPM)
+        private double positionCoefficient = 0.05;
+        private double positionTolerance = 13.6;
+        private double distancePerPulse = 0.0;
+
+        private boolean velocityGainsConfigured = false;
+        private double velocityKp = 0.0;
+        private double velocityKi = 0.0;
+        private double velocityKd = 0.0;
+
+        private boolean feedforwardConfigured = false;
+        private double feedforwardKs = 0.0;
+        private double feedforwardKv = 0.0;
+
+        public Builder(
+                HardwareMap hw,
+                String name,
+                Position position,
+                double cpr,
+                double maxRPM)
         {
-
             this.hardwareMap = hw;
             this.name = name;
             this.position = position;
@@ -506,107 +439,111 @@ public final class MotorConfig
             this.maxRPM = maxRPM;
         }
 
-        /**
-         * Creates a new MotorConfig builder without CPR and max RPM (power control only)
-         *
-         * @param hw       Hardware map
-         * @param name     Motor name
-         * @param position Motor position
-         */
-        public Builder (HardwareMap hw, String name, Position position)
+        public Builder(HardwareMap hw, String name, Position position)
         {
-
-            this(hw, name, position, 0, 0);
+            this(hw, name, position, 0.0, 0.0);
         }
 
-        /**
-         * Sets motor direction as inverted
-         *
-         * @return Builder instance
-         */
-        public Builder inverted ()
+        public Builder inverted()
         {
-
-            this.inverted = true;
+            inverted = true;
             return this;
         }
 
-        /**
-         * Sets zero power behavior
-         *
-         * @param zeroPowerBehavior Zero power behavior to set
-         * @return Builder instance
-         */
-        public Builder zeroPowerBehavior (Motor.ZeroPowerBehavior zeroPowerBehavior)
+        public Builder zeroPowerBehavior(
+                Motor.ZeroPowerBehavior zeroPowerBehavior)
         {
+            if (zeroPowerBehavior == null)
+            {
+                throw new IllegalArgumentException(
+                        "Zero power behavior cannot be null.");
+            }
 
             this.zeroPowerBehavior = zeroPowerBehavior;
             return this;
         }
 
-        /**
-         * Disables velocity control (uses raw power instead)
-         *
-         * @return Builder instance
-         */
-        public Builder disableVelocityControl ()
+        public Builder disableVelocityControl()
         {
-
-            this.velocityEnabled = false;
+            velocityEnabled = false;
             return this;
         }
 
-        /**
-         * Sets the position coefficient for position control
-         *
-         * @param coefficient Position coefficient (kP)
-         * @return Builder instance
-         */
-        public Builder setPositionCoefficient (double coefficient)
+        public Builder setPositionCoefficient(double coefficient)
         {
+            requireFinite(coefficient, "Position coefficient");
 
-            this.positionCoefficient = coefficient;
+            if (coefficient < 0.0)
+            {
+                throw new IllegalArgumentException(
+                        "Position coefficient cannot be negative.");
+            }
+
+            positionCoefficient = coefficient;
             return this;
         }
 
-        /**
-         * Sets the position tolerance for position control
-         *
-         * @param tolerance Position tolerance in encoder ticks
-         * @return Builder instance
-         */
-        public Builder setPositionTolerance (double tolerance)
+        public Builder setPositionTolerance(double tolerance)
         {
+            requireFinite(tolerance, "Position tolerance");
 
-            this.positionTolerance = tolerance;
+            if (tolerance < 0.0)
+            {
+                throw new IllegalArgumentException(
+                        "Position tolerance cannot be negative.");
+            }
+
+            positionTolerance = tolerance;
             return this;
         }
 
-        /**
-         * Sets the distance per pulse for distance-based position control
-         * Typically: (wheel circumference) / (encoder counts per revolution)
-         *
-         * @param distancePerPulse Distance traveled per encoder tick
-         * @return Builder instance
-         */
-        public Builder setDistancePerPulse (double distancePerPulse)
+        public Builder setDistancePerPulse(double distancePerPulse)
         {
+            requireFinite(distancePerPulse, "Distance per pulse");
+
+            if (distancePerPulse <= 0.0)
+            {
+                throw new IllegalArgumentException(
+                        "Distance per pulse must be positive.");
+            }
 
             this.distancePerPulse = distancePerPulse;
             return this;
         }
 
-        /**
-         * Builds the MotorConfig instance
-         *
-         * @return Configured MotorConfig instance
-         */
-        public MotorConfig build ()
+        public Builder setVelocityPID(double kp, double ki, double kd)
         {
+            requireFinite(kp, "Velocity kP");
+            requireFinite(ki, "Velocity kI");
+            requireFinite(kd, "Velocity kD");
 
+            if (kp < 0.0 || ki < 0.0 || kd < 0.0)
+            {
+                throw new IllegalArgumentException(
+                        "Velocity PID gains cannot be negative.");
+            }
+
+            velocityKp = kp;
+            velocityKi = ki;
+            velocityKd = kd;
+            velocityGainsConfigured = true;
+            return this;
+        }
+
+        public Builder setVelocityFeedforward(double ks, double kv)
+        {
+            requireFinite(ks, "Feedforward kS");
+            requireFinite(kv, "Feedforward kV");
+
+            feedforwardKs = ks;
+            feedforwardKv = kv;
+            feedforwardConfigured = true;
+            return this;
+        }
+
+        public MotorConfig build()
+        {
             return new MotorConfig(this);
         }
     }
 }
-
-

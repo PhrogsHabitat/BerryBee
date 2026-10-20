@@ -6,6 +6,8 @@ import com.pedropathing.math.Pose;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import org.firstinspires.ftc.teamcode.Purple.Components.Motors.MotorConfig;
+import org.firstinspires.ftc.teamcode.Purple.Components.Servos.ServoConfig;
+import org.firstinspires.ftc.teamcode.Purple.Constants;
 import org.firstinspires.ftc.teamcode.Purple.Memory.PurpleMemory;
 import org.firstinspires.ftc.teamcode.Purple.Names;
 import org.firstinspires.ftc.teamcode.Purple.Utils.DebugUtil;
@@ -38,7 +40,7 @@ public class Explosher
 	private final MotorConfig motor;
 	private final MotorConfig motor2;
 
-//	private final ServoConfig gateConfig;
+	private final ServoConfig gateConfig;
 
 	private GateState gateState = GateState.STOP;
 	private boolean regressionEnabled = false;
@@ -46,7 +48,8 @@ public class Explosher
 	private double regressionSlope;
 	private double regressionIntercept;
 	private double smoothedTargetRPM = 0.0;
-	private double targetRPM = 0.0;
+	private double targetRPM1 = 0.0;
+	private double targetRPM2 = 0.0;
 	private double aimX = AIM_X;
 	private double aimY = AIM_Y;
 
@@ -59,7 +62,7 @@ public class Explosher
 				112,
 				6000
 		).zeroPowerBehavior(Motor.ZeroPowerBehavior.FLOAT)
-				.disableVelocityControl()
+
 				.build();
 		motor.setVelocityDirectionReversed(false);
 
@@ -70,18 +73,17 @@ public class Explosher
 				112,
 				6000
 		).zeroPowerBehavior(Motor.ZeroPowerBehavior.FLOAT)
-				.disableVelocityControl()
 				.build();
 		motor2.setVelocityDirectionReversed(false);
 
-//		gateConfig = new ServoConfig.Builder(hardwareMap, Names.BLOCKER)
-//				.setRange(Constants.BLOCKER_MIN, Constants.BLOCKER_MAX)
-//				.build();
-//		gateConfig.setState(ServoConfig.ServoState.ON);
+		gateConfig = new ServoConfig.Builder(hardwareMap, Names.BLOCKER)
+				.setRange(Constants.BLOCKER_MIN, Constants.BLOCKER_MAX)
+				.build();
+		gateConfig.setState(ServoConfig.ServoState.ON);
 
 		calculateRegression();
 		stop();
-//		setGateState(GateState.STOP);
+		setGateState(GateState.STOP);
 	}
 
 	/**
@@ -91,6 +93,7 @@ public class Explosher
 	{
 		updateShooterPower();
 		motor.update();
+		motor2.update();
 
 		if (regressionEnabled)
 		{
@@ -101,6 +104,8 @@ public class Explosher
 				double rawTargetRPM = (regressionSlope * targetDistance) + regressionIntercept;
 				smoothedTargetRPM += RPM_SMOOTHING_ALPHA * (rawTargetRPM - smoothedTargetRPM);
 				smoothedTargetRPM = MathUtil.clamp(smoothedTargetRPM, 0.0, motor.getMaxRPM());
+				targetRPM1 = smoothedTargetRPM;
+				targetRPM2 = smoothedTargetRPM;
 			}
 		}
 		else
@@ -108,21 +113,27 @@ public class Explosher
 			hasRegressionTarget = false;
 		}
 
-		DebugUtil.logAdd("Explosher RPM: " +
-				String.format("%.2f", getCurrentRPM()) +
+		DebugUtil.logAdd("Explosher RPM M1: " +
+				String.format("%.2f", getCurrentRPM(1)) +
 				" / " +
-				String.format("%.2f", getTargetRPM()));
-//		DebugUtil.logAdd("Gate State: " + gateState +
-//				" | Pos: " + String.format("%.3f", getGatePosition()));
+				String.format("%.2f", getTargetRPM(1)) +
+				" | M2: " +
+				String.format("%.2f", getCurrentRPM(2)) +
+				" / " +
+				String.format("%.2f", getTargetRPM(2)));
+		DebugUtil.logAdd("Gate State: " + gateState +
+				" | Pos: " + String.format("%.3f", getGatePosition()));
 	}
 
 	/**
-	 * Stops the shooter motor and clears the target RPM.
+	 * Stops the shooter motors and clears target RPMs.
 	 */
 	public void stop ()
 	{
 		motor.stop();
-		targetRPM = 0.0;
+		motor2.stop();
+		targetRPM1 = 0.0;
+		targetRPM2 = 0.0;
 	}
 
 	public boolean isRegressionEnabled ()
@@ -140,7 +151,7 @@ public class Explosher
 		regressionEnabled = enabled;
 		if (enabled)
 		{
-			smoothedTargetRPM = getCurrentRPM();
+			smoothedTargetRPM = getCurrentRPM(1);
 		}
 	}
 
@@ -165,23 +176,60 @@ public class Explosher
 	}
 
 	/**
-	 * Sets shooter target RPM.
+	 * Sets shooter target RPM for the specified motor (1 or 2).
+	 *
+	 * @param motorNumber Motor index (1 for motor 1, 2 for motor 2).
+	 * @param rpm         Target RPM.
+	 */
+	public void setRPM (int motorNumber, double rpm)
+	{
+		if (motorNumber == 1)
+		{
+			targetRPM1 = MathUtil.clamp(rpm, -motor.getMaxRPM(), motor.getMaxRPM());
+		}
+		else if (motorNumber == 2)
+		{
+			targetRPM2 = MathUtil.clamp(rpm, -motor2.getMaxRPM(), motor2.getMaxRPM());
+		}
+	}
+
+	/**
+	 * Sets shooter target RPM for both motors.
 	 *
 	 * @param rpm Target RPM.
 	 */
 	public void setRPM (double rpm)
 	{
-		targetRPM = MathUtil.clamp(rpm, -motor.getMaxRPM(), motor.getMaxRPM());
+		setRPM(1, rpm);
+		setRPM(2, rpm);
+	}
+
+	public double getCurrentRPM (int motorNumber)
+	{
+		if (motorNumber == 2)
+		{
+			return motor2.getCurrentRPM();
+		}
+		return motor.getCurrentRPM();
 	}
 
 	public double getCurrentRPM ()
 	{
-		return motor.getCurrentRPM();
+		return getCurrentRPM(1);
+	}
+
+	public double getTargetRPM (int motorNumber)
+	{
+		if (motorNumber == 2)
+		{
+			return targetRPM2;
+		}
+		return targetRPM1;
 	}
 
 	public double getTargetRPM ()
 	{
-		return targetRPM;
+		return getTargetRPM(1);
 	}
 
 	public double getMaxRPM ()
@@ -189,50 +237,41 @@ public class Explosher
 		return motor.getMaxRPM();
 	}
 
-	/**
-	 * Sets the field-space point used for RPM regression distance.
-	 */
-	public void setAimPoint (double x, double y)
-	{
-		aimX = x;
-		aimY = y;
-	}
-
 	public GateState getGateState ()
 	{
 		return gateState;
 	}
 
-//	public void setGateState (GateState state)
-//	{
-//		gateState = state;
-//		gateConfig.setState(ServoConfig.ServoState.ON);
-//
-//		switch (state)
-//		{
-//			case STOP:
-//				setGatePosition(Constants.GATE_STOP_POSITION);
-//				break;
-//			case PASS:
-//				setGatePosition(Constants.GATE_PASS_POSITION);
-//				break;
-//		}
-//	}
+	public void setGateState (GateState state)
+	{
+		gateState = state;
+		gateConfig.setState(ServoConfig.ServoState.ON);
 
-//	public void toggleGateState ()
-//	{
-//		setGateState(gateState == GateState.STOP ? GateState.PASS : GateState.STOP);
-//	}
+		switch (state)
+		{
+			case STOP:
+				setGatePosition(Constants.GATE_OUT_POSITION);
+				break;
+			case PASS:
+				setGatePosition(Constants.GATE_PASS_POSITION);
+				break;
+		}
+	}
 
-//	public double getGatePosition ()
-//	{
-//		return gateConfig.getPosition();
-//	}
-//
-//	public void setGatePosition (double position)
-//	{
-//		gateConfig.setPosition(position);
-//	}
+	public void toggleGateState ()
+	{
+		setGateState(gateState == GateState.STOP ? GateState.PASS : GateState.STOP);
+	}
+
+	public double getGatePosition ()
+	{
+		return gateConfig.getPosition();
+	}
+
+	public void setGatePosition (double position)
+	{
+		gateConfig.setPosition(position);
+	}
 
 	private void calculateRegression ()
 	{
@@ -295,22 +334,33 @@ public class Explosher
 
 	private void updateShooterPower ()
 	{
-		if (Math.abs(targetRPM) < RPM_STOP_DEADBAND)
+		if (Math.abs(targetRPM1) < RPM_STOP_DEADBAND)
 		{
 			motor.setPower(0.0);
-			motor2.setPower(0.0);
-
-			return;
+		}
+		else
+		{
+			double currentRPM1 = motor.getCurrentRPM();
+			double rpmError1 = targetRPM1 - currentRPM1;
+			double feedforwardPower1 = (SHOOTER_KV * targetRPM1) + Math.copySign(SHOOTER_KS, targetRPM1);
+			double correctionPower1 = SHOOTER_KP * rpmError1;
+			double commandedPower1 = MathUtil.clamp(feedforwardPower1 + correctionPower1, -1.0, 1.0);
+			motor.setPower(commandedPower1);
 		}
 
-		double currentRPM = getCurrentRPM();
-		double rpmError = targetRPM - currentRPM;
-		double feedforwardPower = (SHOOTER_KV * targetRPM) + Math.copySign(SHOOTER_KS, targetRPM);
-		double correctionPower = SHOOTER_KP * rpmError;
-		double commandedPower = MathUtil.clamp(feedforwardPower + correctionPower, -1.0, 1.0);
-		motor.setPower(commandedPower);
-		motor2.setPower(commandedPower);
-
+		if (Math.abs(targetRPM2) < RPM_STOP_DEADBAND)
+		{
+			motor2.setPower(0.0);
+		}
+		else
+		{
+			double currentRPM2 = motor2.getCurrentRPM();
+			double rpmError2 = targetRPM2 - currentRPM2;
+			double feedforwardPower2 = (SHOOTER_KV * targetRPM2) + Math.copySign(SHOOTER_KS, targetRPM2);
+			double correctionPower2 = SHOOTER_KP * rpmError2;
+			double commandedPower2 = MathUtil.clamp(feedforwardPower2 + correctionPower2, -1.0, 1.0);
+			motor2.setPower(commandedPower2);
+		}
 	}
 
 	public enum GateState

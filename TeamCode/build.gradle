@@ -27,7 +27,7 @@ dependencies {
     // Third-party libraries required by your team code
     implementation 'com.pedropathing:revhub:3.0.1'
     implementation 'com.pedropathing:tuning:1.0.1'
-    implementation 'com.bylazar:fullpanels:1.0.12'
+    implementation 'com.bylazar:fullpanels:1.0.19'
 
     // FTCLib — required for com.arcrobotics.ftclib.* imports
     implementation 'org.ftclib.ftclib:core:2.1.1'

@@ -6,10 +6,12 @@ import com.bylazar.configurables.annotations.IgnoreConfigurable;
 import com.pedropathing.math.Pose;
 
 @Configurable
-public class AutoRotateController
+public class RotateUtil
 {
 	public double aimX = 128.0;
 	public double aimY = 130.0;
+	public double stickX = 0;
+	public double stickY = 0;
 	public double shooterOffsetDeg = 0.0;
 
 	public double pidKp = 0.018;
@@ -44,12 +46,18 @@ public class AutoRotateController
 		PanelsConfigurables.INSTANCE.refreshClass(this);
 	}
 
-	public double updateTurn (Pose pose)
+	public double updateTurn (Pose pose, Boolean useStick)
 	{
 		if (pose == null)
 		{
 			reset();
 			return 0.0;
+		}
+
+		if (useStick)
+		{
+			aimX = pose.x() + stickX;
+			aimY = pose.y() + stickY;
 		}
 
 		double targetHeadingDeg = getTargetHeadingDeg(pose);
@@ -84,14 +92,15 @@ public class AutoRotateController
 
 		double requestedTurn =
 				(pidKp * headingErrorDeg) +
-				(pidKi * pidIntegral) +
-				(pidKd * pidDerivative);
+						(pidKi * pidIntegral) +
+						(pidKd * pidDerivative);
 		requestedTurn = MathUtil.clamp(requestedTurn, -pidMaxTurn, pidMaxTurn);
 
 		lastTurnPower = slew(lastTurnPower, requestedTurn, dt, pidMaxSlew);
 		pidPreviousError = headingErrorDeg;
 		return lastTurnPower;
 	}
+
 
 	public void reset ()
 	{
@@ -104,15 +113,6 @@ public class AutoRotateController
 		pidLastTimestampNs = 0L;
 	}
 
-	public double getAimX ()
-	{
-		return aimX;
-	}
-
-	public double getAimY ()
-	{
-		return aimY;
-	}
 
 	public double getLastTurnPower ()
 	{

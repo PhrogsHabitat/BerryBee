@@ -1,8 +1,10 @@
+
 package org.firstinspires.ftc.teamcode.Purple;
 
 import com.bylazar.configurables.annotations.Configurable;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.math.Pose;
+import com.pedropathing.paths.Path;
 
 import org.firstinspires.ftc.teamcode.Purple.Components.Explosher.Explosher;
 import org.firstinspires.ftc.teamcode.Purple.Components.OpMode.PurpleOpMode;
@@ -10,16 +12,24 @@ import org.firstinspires.ftc.teamcode.Purple.Components.Vaccum.Vaccum;
 import org.firstinspires.ftc.teamcode.Purple.Memory.PurpleMemory;
 import org.firstinspires.ftc.teamcode.Purple.Utils.DebugUtil;
 
-@com.qualcomm.robotcore.eventloop.opmode.TeleOp(name = "PurpleTeleOp", group = "Purple")
+import static com.pedropathing.api.Paths.line;
+
+@com.qualcomm.robotcore.eventloop.opmode.TeleOp(
+		name = "PurpleTeleOp",
+		group = "Purple"
+)
 @Configurable
 public class TeleOp extends PurpleOpMode
 {
-	private static final Pose DEFAULT_TELEOP_START_POSE = new Pose(72, 72, Math.toRadians(0.0));
-	public static Pose startingPose;
-	// Pollen 3000
-	// Necter 3300
+	private static final Pose DEFAULT_TELEOP_START_POSE =
+			new Pose(0, 0, Math.toRadians(90));
 
-	public double swagRPM = 2500;
+	public static Pose startingPose;
+
+	// Pollen: 2900 RPM
+	// Nectar: 3300 RPM
+	public double swagRPM = 2900;
+	public double swagRPM2 = 3300;
 
 	private Controls driver1;
 	private Controls driver2;
@@ -28,17 +38,28 @@ public class TeleOp extends PurpleOpMode
 	private Vaccum vaccum;
 	private Explosher explosher;
 
+	public static double SNAP_RANGE = 25.0;
+
+	public static Pose[] SNAP_POINTS =
+			{
+					new Pose(0, 0, Math.toRadians(90)),
+					new Pose(10, 80, Math.toRadians(90)),
+					new Pose(72, 72, Math.toRadians(0))
+			};
+
+	private boolean snapActive = false;
+	private Pose activeSnapPoint = null;
+
 	@Override
 	public void create()
 	{
 		driver1 = new Controls(gamepad1);
 		driver2 = new Controls(gamepad2);
 
-		// PedroPathing 3.0 Follower creation.
-		follower = org.firstinspires.ftc.teamcode.pedro.Constants.create(hardwareMap);
+		follower = org.firstinspires.ftc.teamcode.pedro.Constants
+				.create(hardwareMap);
 
-		// Pedro 3 uses setPose() to initialize the localizer pose.
-		follower.setPose(startingPose == null ? DEFAULT_TELEOP_START_POSE : startingPose);
+		follower.setPose(DEFAULT_TELEOP_START_POSE);
 		follower.update();
 
 		PurpleMemory.initialize(hardwareMap, follower);
@@ -55,7 +76,6 @@ public class TeleOp extends PurpleOpMode
 		driver1.update();
 		driver2.update();
 
-		// Pedro must be updated every loop so localization and drivetrain control run.
 		follower.update();
 
 		PurpleMemory.Instance.update();
@@ -74,17 +94,65 @@ public class TeleOp extends PurpleOpMode
 	@Override
 	public void destroy()
 	{
-		vaccum.stop();
-		explosher.stop();
+		if (follower != null)
+		{
+			follower.stop();
+		}
+
+		if (vaccum != null)
+		{
+			vaccum.stop();
+		}
+
+		if (explosher != null)
+		{
+			explosher.stop();
+		}
 	}
 
 	private void updateDrive()
 	{
-		double forward = -gamepad1.left_stick_y * Constants.DRIVE_POWER_SCALE;
-		double strafe = -gamepad1.left_stick_x * Constants.DRIVE_POWER_SCALE;
-		double turn = -gamepad1.right_stick_x * Constants.DRIVE_POWER_SCALE;
+		boolean snapButtonDown = driver1.isPressed("right_bumper");
 
-		// PedroPathing 3.0 manual TeleOp API.
+		// Start the path once per button press.
+		if (driver1.justPressed("right_bumper"))
+		{
+			Pose currentPose = follower.pose();
+
+			Pose targetPose = new Pose(0, 0, Math.toRadians(0));
+
+			Path snapPath = line(currentPose, targetPose)
+					.linear(currentPose, targetPose);
+
+			follower.follow(snapPath);
+
+			activeSnapPoint = targetPose;
+			snapActive = true;
+		}
+
+		if (snapButtonDown)
+		{
+
+			return;
+		}
+
+		if (snapActive)
+		{
+			follower.stop();
+
+			activeSnapPoint = null;
+			snapActive = false;
+		}
+
+		double forward = -gamepad1.left_stick_y
+				* Constants.DRIVE_POWER_SCALE;
+
+		double strafe = -gamepad1.left_stick_x
+				* Constants.DRIVE_POWER_SCALE;
+
+		double turn = -gamepad1.right_stick_x
+				* Constants.DRIVE_POWER_SCALE;
+
 		follower.manual(forward, strafe, turn);
 	}
 
@@ -107,15 +175,47 @@ public class TeleOp extends PurpleOpMode
 	private void updateExplosher()
 	{
 		explosher.setRegressionEnabled(false);
-		explosher.setRPM(swagRPM);
 
+		if (driver2.getRightStickY() > 0.5)
+		{
+			explosher.setRPM(1, swagRPM);
+			explosher.setRPM(2, swagRPM2);
+		}
+		else if (driver2.getRightStickY() < -0.5)
+		{
+			explosher.setRPM(1, 0);
+			explosher.setRPM(2, 0);
+		}
+
+		if (driver2.isPressed("right_trigger"))
+		{
+			explosher.setGateState(Explosher.GateState.PASS);
+		}
+		else
+		{
+			explosher.setGateState(Explosher.GateState.STOP);
+		}
+
+		// Adjust pollen RPM.
 		if (driver1.justPressed("dpad_up"))
 		{
 			swagRPM += 100;
 		}
+
 		if (driver1.justPressed("dpad_down"))
 		{
 			swagRPM -= 100;
+		}
+
+		// Adjust nectar RPM.
+		if (driver1.justPressed("dpad_right"))
+		{
+			swagRPM2 += 100;
+		}
+
+		if (driver1.justPressed("dpad_left"))
+		{
+			swagRPM2 -= 100;
 		}
 	}
 
@@ -124,5 +224,9 @@ public class TeleOp extends PurpleOpMode
 		Pose pose = follower.pose();
 
 		DebugUtil.logAdd("[FOLLOWER] POSE: " + pose);
+		DebugUtil.logAdd("[SNAP] ACTIVE: " + snapActive);
+		DebugUtil.logAdd("[SNAP] TARGET: " + activeSnapPoint);
+		DebugUtil.logAdd("[SNAP] RANGE: " + SNAP_RANGE);
+		DebugUtil.logAdd("[SNAP] FOLLOWING: " + follower.following());
 	}
 }
