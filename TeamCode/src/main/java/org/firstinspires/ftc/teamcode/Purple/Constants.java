@@ -8,8 +8,14 @@ public final class Constants
 	// Blocker servo configuration values
 	public static final double BLOCKER_MIN = 0.0;
 	public static final double BLOCKER_MAX = 1.0;
-	public static final double GATE_OUT_POSITION = 1.0;
-	public static final double GATE_PASS_POSITION = 0.15;
+	public static final double FLICKER_MIN = 0.0;
+	public static final double FLICKER_MAX = 1.0;
+
+	public static final double FLICK_POSITION = 1.0;
+	public static final double IDLE_POSITION = 0.6;
+	public static final double BLOCK_POSITION = 1.0;
+	public static final double PASS_POSITION = 0.0;
+
 
 	// Drive settings
 	public static final double DRIVE_POWER_SCALE = 1.0;

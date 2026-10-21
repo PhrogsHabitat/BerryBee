@@ -31,18 +31,23 @@ public class Explosher
 			{93, 4400},
 			{91, 4500},
 			{116, 4900}
-
 	};
 
 	public static double AIM_X = 128;
 	public static double AIM_Y = 130;
 
+	/** Gate identifiers for the servo gates. */
+	public static final int BLOCKER = 1;
+	public static final int FLICKER = 2;
+
 	private final MotorConfig motor;
 	private final MotorConfig motor2;
 
-	private final ServoConfig gateConfig;
+	private final ServoConfig blockerConfig;
+	private final ServoConfig flickerConfig;
 
-	private GateState gateState = GateState.STOP;
+	private GateState blockerState = GateState.STOP;
+	private GateState flickerState = GateState.STOP;
 	private boolean regressionEnabled = false;
 	private boolean hasRegressionTarget = false;
 	private double regressionSlope;
@@ -62,7 +67,6 @@ public class Explosher
 				112,
 				6000
 		).zeroPowerBehavior(Motor.ZeroPowerBehavior.FLOAT)
-
 				.build();
 		motor.setVelocityDirectionReversed(false);
 
@@ -76,14 +80,20 @@ public class Explosher
 				.build();
 		motor2.setVelocityDirectionReversed(false);
 
-		gateConfig = new ServoConfig.Builder(hardwareMap, Names.BLOCKER)
+		blockerConfig = new ServoConfig.Builder(hardwareMap, Names.NECFINN)
 				.setRange(Constants.BLOCKER_MIN, Constants.BLOCKER_MAX)
 				.build();
-		gateConfig.setState(ServoConfig.ServoState.ON);
+		blockerConfig.setState(ServoConfig.ServoState.ON);
+
+		flickerConfig = new ServoConfig.Builder(hardwareMap, Names.POLLFINN)
+				.setRange(Constants.FLICKER_MIN, Constants.FLICKER_MAX)
+				.build();
+		flickerConfig.setState(ServoConfig.ServoState.ON);
 
 		calculateRegression();
 		stop();
-		setGateState(GateState.STOP);
+		setGateState(BLOCKER, GateState.STOP);
+		setGateState(FLICKER, GateState.STOP);
 	}
 
 	/**
@@ -121,8 +131,10 @@ public class Explosher
 				String.format("%.2f", getCurrentRPM(2)) +
 				" / " +
 				String.format("%.2f", getTargetRPM(2)));
-		DebugUtil.logAdd("Gate State: " + gateState +
-				" | Pos: " + String.format("%.3f", getGatePosition()));
+		DebugUtil.logAdd("Blocker: " + blockerState +
+				" | Pos: " + String.format("%.3f", blockerConfig.getPosition()) +
+				" || Flicker: " + flickerState +
+				" | Pos: " + String.format("%.3f", flickerConfig.getPosition()));
 	}
 
 	/**
@@ -237,40 +249,100 @@ public class Explosher
 		return motor.getMaxRPM();
 	}
 
-	public GateState getGateState ()
+	/**
+	 * Returns the current state of the specified gate.
+	 *
+	 * @param gate {@link #BLOCKER} or {@link #FLICKER}.
+	 */
+	public GateState getGateState (int gate)
 	{
-		return gateState;
+		return gate == FLICKER ? flickerState : blockerState;
 	}
 
-	public void setGateState (GateState state)
+	/**
+	 * Sets the state of the specified gate and moves it to the
+	 * corresponding STOP or PASS position.
+	 *
+	 * @param gate  {@link #BLOCKER} or {@link #FLICKER}.
+	 * @param state Desired gate state.
+	 */
+	public void setGateState (int gate, GateState state)
 	{
-		gateState = state;
-		gateConfig.setState(ServoConfig.ServoState.ON);
+		if (gate == FLICKER)
+		{
+			flickerState = state;
+		}
+		else
+		{
+			blockerState = state;
+		}
+
+		ServoConfig config = getGateConfig(gate);
+		config.setState(ServoConfig.ServoState.ON);
 
 		switch (state)
 		{
 			case STOP:
-				setGatePosition(Constants.GATE_OUT_POSITION);
+				config.setPosition(getStopPosition(gate));
 				break;
 			case PASS:
-				setGatePosition(Constants.GATE_PASS_POSITION);
+				config.setPosition(getPassPosition(gate));
 				break;
 		}
 	}
 
-	public void toggleGateState ()
+	/**
+	 * Toggles the specified gate between STOP and PASS.
+	 *
+	 * @param gate {@link #BLOCKER} or {@link #FLICKER}.
+	 */
+	public void toggleGateState (int gate)
 	{
-		setGateState(gateState == GateState.STOP ? GateState.PASS : GateState.STOP);
+		setGateState(gate, getGateState(gate) == GateState.STOP ? GateState.PASS : GateState.STOP);
 	}
 
-	public double getGatePosition ()
+	/**
+	 * Returns the raw servo position of the specified gate.
+	 *
+	 * @param gate {@link #BLOCKER} or {@link #FLICKER}.
+	 */
+	public double getPosition (int gate)
 	{
-		return gateConfig.getPosition();
+		return getGateConfig(gate).getPosition();
 	}
 
-	public void setGatePosition (double position)
+	/**
+	 * Sets the raw servo position of the specified gate.
+	 *
+	 * @param gate     {@link #BLOCKER} or {@link #FLICKER}.
+	 * @param position Servo position.
+	 */
+	public void setPosition (int gate, double position)
 	{
-		gateConfig.setPosition(position);
+		getGateConfig(gate).setPosition(position);
+	}
+
+	private ServoConfig getGateConfig (int gate)
+	{
+		if (gate == BLOCKER)
+		{
+			return blockerConfig;
+		}
+		if (gate == FLICKER)
+		{
+			return flickerConfig;
+		}
+		throw new IllegalArgumentException("Gate must be " + BLOCKER + " (blocker) or " + FLICKER + " (flicker).");
+	}
+
+	private double getStopPosition (int gate)
+	{
+		return gate == FLICKER ? Constants.FLICK_POSITION : Constants.BLOCK_POSITION;
+	}
+
+	private double getPassPosition (int gate)
+	{
+		return gate == FLICKER ? Constants.IDLE_POSITION : Constants.PASS_POSITION;
 	}
 
 	private void calculateRegression ()

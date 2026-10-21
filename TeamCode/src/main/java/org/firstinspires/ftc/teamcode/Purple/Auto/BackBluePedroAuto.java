@@ -10,15 +10,17 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.teamcode.Purple.Components.Explosher.Explosher;
 import org.firstinspires.ftc.teamcode.Purple.Components.Lime.LimeUtil;
+import org.firstinspires.ftc.teamcode.Purple.Components.OpMode.PurpleOpMode;
 import org.firstinspires.ftc.teamcode.Purple.Components.Vaccum.Vaccum;
 import org.firstinspires.ftc.teamcode.Purple.Names;
 import org.firstinspires.ftc.teamcode.Purple.Pathing.PurpleChain;
 import org.firstinspires.ftc.teamcode.Purple.Pathing.PurplePath;
 import org.firstinspires.ftc.teamcode.Purple.Pathing.PurplePathing;
 import org.firstinspires.ftc.teamcode.Purple.Utils.DebugUtil;
+import org.firstinspires.ftc.teamcode.Purple.Components.OpMode.PurpleOpMode;
 
 @Autonomous(name = "BackBluePedroAuto", group = "Purple")
-public class BackBluePedroAuto extends OpMode {
+public class BackBluePedroAuto extends PurpleOpMode {
 
     private Follower follower;
 
@@ -27,23 +29,13 @@ public class BackBluePedroAuto extends OpMode {
 
     public ElapsedTime shootTimer;
 
-    private final Pose startPose = new Pose(62.5, 8, Math.toRadians(90));
+    private final Pose startPose = new Pose(62.5, 10, Math.toRadians(90));
 
     private PurplePathing pathManager;
 
     @Override
-    public void init() {
-
-        onCreate();
-    }
-
-    @Override
-    public void loop() {
-
-        onUpdate();
-    }
-
-    private void onCreate() {
+    public void create()
+    {
 
         follower = org.firstinspires.ftc.teamcode.pedro.Constants.create(hardwareMap);
         follower.setPose(new Pose(0,0,0));
@@ -67,7 +59,9 @@ public class BackBluePedroAuto extends OpMode {
         DebugUtil.setTelemetry(telemetry);
     }
 
-    private void onUpdate() {
+    @Override
+    public void update()
+    {
         // update the manager (must be called every loop)
         pathManager.update();
         explosher.update();
@@ -76,6 +70,12 @@ public class BackBluePedroAuto extends OpMode {
         // logging
         DebugUtil.logAdd("Current Path: " + pathManager.curPath());
         DebugUtil.update();
+
     }
 
+    @Override
+    public void destroy()
+    {
+
+    }
 }

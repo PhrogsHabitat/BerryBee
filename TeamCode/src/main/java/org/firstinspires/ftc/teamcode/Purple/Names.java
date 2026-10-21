@@ -17,7 +17,9 @@ public final class Names
 	public static final String MIDTAKE = "BE"; // MIDINTAKE mispelled X_X
 
 	// Servo names
-	public static final String BLOCKER = "FINN";
+	public static final String NECFINN = "FINN";
+	public static final String POLLFINN = "FINN2";
+
 
 	// Sensor names
 	public static final String LIME = "SwagLime";
