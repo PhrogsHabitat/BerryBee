@@ -12,9 +12,9 @@ public final class Constants
 	public static final double FLICKER_MAX = 1.0;
 
 	public static final double FLICK_POSITION = 1.0;
-	public static final double IDLE_POSITION = 0.6;
+	public static final double IDLE_POSITION = 0.78;
 	public static final double BLOCK_POSITION = 1.0;
-	public static final double PASS_POSITION = 0.0;
+	public static final double PASS_POSITION = 0.65;
 
 
 	// Drive settings

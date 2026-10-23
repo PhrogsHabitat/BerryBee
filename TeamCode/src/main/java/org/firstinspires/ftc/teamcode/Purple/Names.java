@@ -14,11 +14,10 @@ public final class Names
 
 	public static final String INTAKE = "FE";
 
-	public static final String MIDTAKE = "BE"; // MIDINTAKE mispelled X_X
+	public static final String MIDTAKE = "BE";
 
-	// Servo names
-	public static final String NECFINN = "FINN";
-	public static final String POLLFINN = "FINN2";
+	public static final String NECFINN = "FINN2";
+	public static final String POLLFINN = "FINN";
 
 
 	// Sensor names
