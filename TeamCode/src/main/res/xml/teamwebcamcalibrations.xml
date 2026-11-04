@@ -118,7 +118,8 @@
             size="640 360"
             focalLength="463.566f, 463.566f"
             principalPoint="316.402f, 176.412f"
-            distortionCoefficients="0.111626 , -0.255626, 0, 0, 0.107992, 0, 0, 0"
+            distortionCoefficients="0.1
+            11626 , -0.255626, 0, 0, 0.107992, 0, 0, 0"
             />
 
         <Calibration

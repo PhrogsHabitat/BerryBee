@@ -98,11 +98,10 @@ public class PurplePathing
 			double waited = waitTimer.seconds(); // CHANGED: was getElapsedTimeSeconds()
 			double waitFor = currentPath.getWaitTimeSec();
 
+			currentPath.runOnComplete();
+
 			if (waited >= waitFor)
 			{
-				// the post-path delay has finished; now run the per-path callback.
-				currentPath.runOnComplete();
-
 				// proceed based on whether we're in a chain or a standalone path
 				if (chainActive && currentChain != null)
 				{
@@ -150,6 +149,9 @@ public class PurplePathing
 		this.pathActive = true;
 		this.waitingAfterPath = false;
 		this.pathTimer.reset();
+
+		// fire onStart right when the path starts
+		path.runOnStart();
 
 		follower.follow(path.getPath());
 	}
