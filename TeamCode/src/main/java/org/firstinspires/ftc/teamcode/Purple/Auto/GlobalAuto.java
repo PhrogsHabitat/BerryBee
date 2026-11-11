@@ -1,121 +1,90 @@
 package org.firstinspires.ftc.teamcode.Purple.Auto;
 
-import static com.pedropathing.api.Paths.*;
+import static com.pedropathing.api.Paths.line;
+import static com.pedropathing.api.Paths.path;
 
-import com.pedropathing.api.PoseFactory;
+import com.arcrobotics.ftclib.hardware.motors.Motor;
+import com.pedropathing.api.Paths;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.math.Pose;
-import com.pedropathing.paths.Path;
-import com.pedropathing.ivy.Command;
-import com.pedropathing.ivy.Scheduler;
-import static com.pedropathing.ivy.Scheduler.schedule;
-import static com.pedropathing.ivy.commands.Commands.instant;
-import static com.pedropathing.ivy.commands.Commands.waitMs;
-import static com.pedropathing.ivy.groups.Groups.sequential;
-import static com.pedropathing.ivy.pedro.PedroCommands.follow;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
-import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.teamcode.Purple.Components.Explosher.Explosher;
-import org.firstinspires.ftc.teamcode.Purple.Memory.PurpleMemory;
-import org.firstinspires.ftc.teamcode.pedro.Constants;
+import org.firstinspires.ftc.teamcode.Purple.Components.Motors.MotorConfig;
+import org.firstinspires.ftc.teamcode.Purple.Components.OpMode.PurpleOpMode;
+import org.firstinspires.ftc.teamcode.Purple.Components.Vaccum.Vaccum;
+import org.firstinspires.ftc.teamcode.Purple.Names;
+import org.firstinspires.ftc.teamcode.Purple.Pathing.PurpleChain;
+import org.firstinspires.ftc.teamcode.Purple.Pathing.PurplePath;
+import org.firstinspires.ftc.teamcode.Purple.Pathing.PurplePathing;
+import org.firstinspires.ftc.teamcode.Purple.Utils.DebugUtil;
 
-@Autonomous(name = "GlobalAuto", group = "Autonomous")
-public class GlobalAuto extends LinearOpMode {
+@Autonomous(name = "GlobalAuto", group = "Purple")
+public class GlobalAuto extends PurpleOpMode {
 
-    private Follower follower;
+    public ElapsedTime swagTimer;
+    public boolean started = false;
 
-    private final PoseFactory poseFactory = PoseFactory.degrees();
-
-    private final Pose start = poseFactory.of(56, 9.5, 90);
-    private final Pose point1Start = poseFactory.of(56, 9.5, 270);
-    private final Pose point1 = poseFactory.of(66, 9.5, 270);
-    private final Pose path1 = poseFactory.of(12, 91, 0);
-    private final Pose path1Control1 = poseFactory.of(19.3069, 46.885, 0);
-
-    public Explosher explosher;
-
-    Command exploOn = instant(() -> exploToggle(true));
-    Command exploOff = instant(() -> exploToggle(false));
-    Command gateOpen = instant(() -> gateToggle(true));
-    Command gateClosed = instant(() -> gateToggle(false));
-
-    public void gateToggle(boolean open)
-    {
-        Explosher.GateState block = open ? Explosher.GateState.PASS : Explosher.GateState.STOP;
-
-        explosher.setGateState(Explosher.BLOCKER, block);
-    }
-
-    public void savePose()
-    {
-        PurpleMemory.Instance.persist().set("PrevX", Double.toString(follower.pose().x()));
-        PurpleMemory.Instance.persist().set("PrevY", Double.toString(follower.pose().y()));
-        PurpleMemory.Instance.persist().set("PrevHeading", Double.toString(follower.pose().heading()));
-    }
-
-    public void exploToggle(boolean on)
-    {
-        int motor1 = on ? 2900 : 0;
-        int motor2 = on ? 3100 : 0;
-
-        explosher.setRPM(1, motor1);
-        explosher.setRPM(2, motor2);
-    }
-
-    public Command autoRoutine() {
-        return sequential(
-                gateClosed,
-                exploOn,
-                follow(follower, path1()),
-                gateOpen,
-                waitMs(5000),
-                gateClosed,
-                exploOff,
-                follow(follower, path1_2())
-        );
-    }
+    public MotorConfig fr;
+    public MotorConfig fl;
+    public MotorConfig br;
+    public MotorConfig bl;
 
     @Override
-    public void runOpMode() {
-        Scheduler.reset();
+    public void create()
+    {
+        // Motor stuff
+        fr = new MotorConfig.Builder(hardwareMap, Names.FRONTRIGHT, MotorConfig.Position.EXPLOSHER, 415.2, 1620).zeroPowerBehavior(Motor.ZeroPowerBehavior.BRAKE)
+                .build();
 
-        follower = Constants.create(hardwareMap);
-        follower.setPose(start);
-        follower.update();
+        fl = new MotorConfig.Builder(hardwareMap, Names.FRONTLEFT, MotorConfig.Position.EXPLOSHER, 415.2, 1620).zeroPowerBehavior(Motor.ZeroPowerBehavior.BRAKE)
+                .inverted()
+                .build();
 
-        explosher = new Explosher(hardwareMap);
-        explosher.setRPM(1, 0);
-        explosher.setRPM(2, 0);
-        explosher.setGateState(Explosher.BLOCKER, Explosher.GateState.STOP);
-        explosher.setGateState(Explosher.FLICKER, Explosher.GateState.STOP);
+        br = new MotorConfig.Builder(hardwareMap, Names.BACKRIGHT, MotorConfig.Position.EXPLOSHER, 415.2, 1620).zeroPowerBehavior(Motor.ZeroPowerBehavior.BRAKE)
+                .build();
 
-        waitForStart();
-        schedule(autoRoutine());
+        bl = new MotorConfig.Builder(hardwareMap, Names.BACKLEFT, MotorConfig.Position.EXPLOSHER, 415.2, 1620).zeroPowerBehavior(Motor.ZeroPowerBehavior.BRAKE)
+                .inverted()
+                .build();
 
-        while (opModeIsActive()) {
-            follower.update();
-            explosher.update();
-            Scheduler.execute();
+        swagTimer = new ElapsedTime();
+        swagTimer.reset();
+    }
 
-            telemetry.addData("x", follower.pose().x());
-            telemetry.addData("y", follower.pose().y());
-            telemetry.addData("heading", follower.pose().heading());
 
-            if (follower.currentPath() != null) {
-                telemetry.addData("Current path distance remaining", follower.distanceToEndpoint());
-                telemetry.addData("Path number", follower.pathIndex());
-            }
+    @Override
+    public void update()
+    {
+        if (!started)
+        {
+            swagTimer.reset();
+            swagTimer.startTime();
 
-            telemetry.update();
+            started = true;
+        }
+
+        if (swagTimer.milliseconds() > 12000)
+        {
+            fr.setPower(0.3);
+            fl.setPower(0.3);
+            br.setPower(0.3);
+            bl.setPower(0.3);
+        }
+        else
+        {
+            fr.setPower(0);
+            fl.setPower(0);
+            br.setPower(0);
+            bl.setPower(0);
         }
     }
 
-    public Path path1() {
-        return line(point1Start, point1).linear(point1Start, point1);
+    @Override
+    public void destroy()
+    {
+
     }
 
-    public Path path1_2() {
-        return curve(point1, path1Control1, path1).linear(point1, path1);
-    }
 }

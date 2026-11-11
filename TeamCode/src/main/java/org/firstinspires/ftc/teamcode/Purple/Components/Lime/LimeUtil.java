@@ -207,6 +207,35 @@ public final class LimeUtil
 	}
 
 	/**
+	 * Calculates estimated distance in inches to a target on the ground using vertical offset angle (ty)
+	 * and Limelight camera geometry.
+	 *
+	 * @param cameraHeightInches Lens height from floor in inches.
+	 * @param targetHeightInches Target center height from floor in inches.
+	 * @param cameraPitchDegrees Downward camera pitch angle in degrees.
+	 * @return Estimated distance in inches, or 0.0 when target is unavailable/invalid.
+	 */
+	public static double distanceToTargetFromTy (double cameraHeightInches, double targetHeightInches, double cameraPitchDegrees)
+	{
+
+		LLResult result = getResult();
+		if (result == null || !result.isValid())
+		{
+			return 0.0;
+		}
+
+		double ty = result.getTy();
+		double angleRad = Math.toRadians(cameraPitchDegrees - ty);
+		double deltaH = cameraHeightInches - targetHeightInches;
+		if (Math.tan(angleRad) <= 0.0)
+		{
+			return 0.0;
+		}
+
+		return deltaH / Math.tan(angleRad);
+	}
+
+	/**
 	 * Gets first visible fiducial ID.
 	 *
 	 * @return Fiducial ID or -1 when unavailable.

@@ -12,10 +12,14 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 import org.firstinspires.ftc.teamcode.Purple.Components.Explosher.Explosher;
 import org.firstinspires.ftc.teamcode.Purple.Components.OpMode.PurpleOpMode;
 import org.firstinspires.ftc.teamcode.Purple.Components.Vaccum.Vaccum;
+import org.firstinspires.ftc.teamcode.Purple.Memory.PurpleMemory;
 import org.firstinspires.ftc.teamcode.Purple.Pathing.PurpleChain;
 import org.firstinspires.ftc.teamcode.Purple.Pathing.PurplePath;
 import org.firstinspires.ftc.teamcode.Purple.Pathing.PurplePathing;
 import org.firstinspires.ftc.teamcode.Purple.Utils.DebugUtil;
+
+import java.util.HashMap;
+import java.util.Map;
 
 @Autonomous(name = "BasicAuto", group = "Purple")
 public class BasicAuto extends PurpleOpMode {
@@ -27,27 +31,32 @@ public class BasicAuto extends PurpleOpMode {
 
     public ElapsedTime flickTimer;
 
+    private final ElapsedTime saveTimer = new ElapsedTime();
+    private static final long SAVE_INTERVAL_MS = 1000;
+
     public boolean shouldExplode = false;
     public boolean shouldFlick = false;
     public boolean shouldSuck = false;
 
-
     private final Pose startPose = new Pose(56, 10, Math.toRadians(270));
-    private final Pose startPose2 = new Pose(35.5, 19, Math.toRadians(230));
+    private final Pose startPose2 = new Pose(50, 19, Math.toRadians(245));
     private final Pose nectarPose1 = new Pose(10, 86, Math.toRadians(90));
-    private final Pose nectarPose2 = new Pose(10, 100, Math.toRadians(90));
-    private final Pose shootPose = new Pose(54, 118, Math.toRadians(90));
-    private final Pose pollenPose = new Pose(10, 10, Math.toRadians(270));
-    private final Pose homePose = new Pose(10, 90, Math.toRadians(180));
-    private final Pose curvePose = new Pose(30, 105);
+    private final Pose nectarPose2 = new Pose(10, 95, Math.toRadians(90));
+    private final Pose shootPose = new Pose(39, 125, Math.toRadians(128));
+    private final Pose shootPose2 = new Pose(32, 122, Math.toRadians(120));
 
+    private final Pose pollenPose = new Pose(10, 10, Math.toRadians(270));
+    private final Pose homePose = new Pose(14, 90, Math.toRadians(180));
+    private final Pose curvePose = new Pose(30, 105);
     private PurplePathing pathManager;
 
     @Override
     public void create() {
 
         follower = org.firstinspires.ftc.teamcode.pedro.Constants.create(hardwareMap);
-        follower.setPose(new Pose(56,10, Math.toRadians(270)));
+        follower.setPose(new Pose(56, 10, Math.toRadians(270)));
+
+        PurpleMemory.initialize(hardwareMap, follower);
 
         pathManager = new PurplePathing(follower);
 
@@ -60,38 +69,48 @@ public class BasicAuto extends PurpleOpMode {
         flickTimer = new ElapsedTime();
         flickTimer.startTime();
 
-        PurplePath path1 = new PurplePath("stay still and shoot", Paths.line(startPose, startPose2).linear(startPose, startPose2), 3, 4)
+        saveTimer.reset();
+
+        // Note: durationSec removed; only waitTimeSec remains.
+        PurplePath path1 = new PurplePath("stay still and shoot",
+                Paths.line(startPose, startPose2).linear(startPose, startPose2), 4)
                 .onStart(() -> path1OnStart())
                 .onComplete(() -> path1Oncomplete());
 
-        PurplePath path2 = new PurplePath("Get TO nector", Paths.line(startPose2, nectarPose1).linear(startPose2, nectarPose1), 3, 0.5)
+        PurplePath path2 = new PurplePath("Get TO nector",
+                Paths.line(startPose2, nectarPose1).linear(startPose2, nectarPose1), 0.5)
                 .onStart(() -> path2OnStart())
                 .onComplete(() -> path2Oncomplete());
 
-        PurplePath path3 = new PurplePath("get THE nector", Paths.line(nectarPose1, nectarPose2).linear(nectarPose1, nectarPose2), 1, 0.5)
+        PurplePath path3 = new PurplePath("get THE nector",
+                Paths.line(nectarPose1, nectarPose2).linear(nectarPose1, nectarPose2), 0.5)
                 .onStart(() -> path3OnStart())
                 .onComplete(() -> path3Oncomplete());
 
-        PurplePath path4 = new PurplePath("move to shoot", Paths.line(nectarPose2, shootPose).linear(nectarPose2, shootPose), 1, 4)
+        PurplePath path4 = new PurplePath("move to shoot",
+                Paths.line(nectarPose2, shootPose).linear(nectarPose2, shootPose), 4)
                 .onStart(() -> path4OnStart())
                 .onComplete(() -> path4Oncomplete());
 
-        PurplePath path5 = new PurplePath("grab pollen", Paths.curve(shootPose, curvePose, pollenPose).linear(shootPose, pollenPose), 5, 0.5)
+        PurplePath path5 = new PurplePath("grab pollen",
+                Paths.curve(shootPose, curvePose, pollenPose).linear(shootPose, pollenPose), 0.5)
                 .onStart(() -> path5OnStart())
                 .onComplete(() -> path5Oncomplete());
 
-        PurplePath path6 = new PurplePath("shoot again", Paths.curve(pollenPose, curvePose, shootPose).linear(pollenPose, shootPose), 4, 4)
+        PurplePath path6 = new PurplePath("move to shoot again",
+                Paths.curve(pollenPose, curvePose, shootPose2).linear(pollenPose, shootPose2), 4)
                 .onStart(() -> path6OnStart())
                 .onComplete(() -> path6Oncomplete());
 
-        PurplePath path7 = new PurplePath("go home", Paths.line(shootPose, homePose).linear(shootPose, homePose), 1, 0)
+        PurplePath path7 = new PurplePath("go home",
+                Paths.line(shootPose, homePose).linear(shootPose, homePose), 1)
                 .onStart(() -> path7OnStart())
                 .onComplete(() -> path7Oncomplete());
 
         PurpleChain chain = new PurpleChain(path1, path2, path3, path4, path5, path6, path7)
                 .onComplete(() -> DebugUtil.logAdd("Chain fully finished"));
 
-        pathManager.startChain(chain, true, () -> DebugUtil.logAdd("startChain() provided onComplete"));
+        pathManager.startChain(chain, true, () -> savePose());
 
         DebugUtil.setTelemetry(telemetry);
     }
@@ -123,47 +142,46 @@ public class BasicAuto extends PurpleOpMode {
 
     public void path3OnStart()
     {
-        // intake on
+        // Intake on
         shouldSuck = true;
     }
     public void path3Oncomplete()
     {
-        // intake off
+        // Intake off
         shouldSuck = false;
     }
 
     public void path4OnStart()
     {
-        //
+        shouldExplode = true;
     }
     public void path4Oncomplete()
     {
-        // explo off
-        shouldExplode = true;
+        // Explo off
         shouldFlick = true;
     }
 
     public void path5OnStart()
     {
-        // intake on
+        // Intake on
         shouldSuck = true;
         shouldExplode = false;
         shouldFlick = false;
     }
     public void path5Oncomplete()
     {
-        // intake off
-        shouldSuck = false;
+
     }
 
     public void path6OnStart()
     {
-
+        // intake off
+        shouldSuck = false;
+        shouldExplode = true;
     }
     public void path6Oncomplete()
     {
         // explo on
-        shouldExplode = true;
         shouldFlick = true;
     }
 
@@ -175,7 +193,7 @@ public class BasicAuto extends PurpleOpMode {
     }
     public void path7Oncomplete()
     {
-
+        savePose();
     }
 
     @Override
@@ -188,6 +206,13 @@ public class BasicAuto extends PurpleOpMode {
         updateExplosher();
         updateFingers();
         updateVaccum();
+
+        // Periodic save so a force-stop mid-auto still leaves a usable pose.
+        if (saveTimer.milliseconds() > SAVE_INTERVAL_MS)
+        {
+            savePose();
+            saveTimer.reset();
+        }
 
         // logging
         DebugUtil.logAdd("Current Path: " + pathManager.curPath());
@@ -263,10 +288,32 @@ public class BasicAuto extends PurpleOpMode {
         }
     }
 
+    private void savePose()
+    {
+        if (follower == null || PurpleMemory.Instance == null
+                || PurpleMemory.Instance.persist() == null)
+        {
+            return;
+        }
+
+        Pose finalPose = follower.pose();
+        if (finalPose == null)
+        {
+            return;
+        }
+
+        // Batched so X/Y/Heading are written in a single atomic transaction.
+        Map<String, String> values = new HashMap<>();
+        values.put("PrevX", String.valueOf(finalPose.x()));
+        values.put("PrevY", String.valueOf(finalPose.y()));
+        values.put("PrevHeading", String.valueOf(Math.toDegrees(finalPose.heading())));
+        PurpleMemory.Instance.persist().setAll(values);
+    }
+
     @Override
     public void destroy()
     {
-
+        savePose();
     }
 
 }

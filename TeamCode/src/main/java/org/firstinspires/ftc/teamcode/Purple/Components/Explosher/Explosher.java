@@ -4,6 +4,7 @@ import com.arcrobotics.ftclib.hardware.motors.Motor;
 import com.bylazar.configurables.annotations.Configurable;
 import com.pedropathing.math.Pose;
 import com.qualcomm.robotcore.hardware.HardwareMap;
+import com.qualcomm.robotcore.hardware.VoltageSensor;
 
 import org.firstinspires.ftc.teamcode.Purple.Components.Motors.MotorConfig;
 import org.firstinspires.ftc.teamcode.Purple.Components.Servos.ServoConfig;
@@ -38,6 +39,11 @@ public class Explosher
 
 	public static double AIM_X = 128;
 	public static double AIM_Y = 130;
+
+	public static double TARGET_RPM = 2900.0;
+	public static double NOMINAL_VOLTAGE = 12.5;
+
+	private VoltageSensor voltageSensor;
 
 	/** Gate identifiers for the servo gates. */
 	public static final int BLOCKER = 1;
@@ -101,10 +107,66 @@ public class Explosher
 				.build();
 		flickerConfig.setState(ServoConfig.ServoState.ON);
 
+		try
+		{
+			voltageSensor = hardwareMap.get(VoltageSensor.class, "Control Hub");
+		}
+		catch (Exception e)
+		{
+			if (hardwareMap.voltageSensor.size() > 0)
+			{
+				voltageSensor = hardwareMap.voltageSensor.iterator().next();
+			}
+			else
+			{
+				voltageSensor = null;
+			}
+		}
+
 		calculateRegression();
 		stop();
 		setGateState(BLOCKER, GateState.STOP);
 		setGateState(FLICKER, GateState.STOP);
+	}
+
+	/**
+	 * Gets the current voltage from the voltage sensor.
+	 *
+	 * @return Voltage in volts, or 0.0 if unavailable.
+	 */
+	public double getVoltage ()
+	{
+		if (voltageSensor == null)
+		{
+			return 0.0;
+		}
+		return voltageSensor.getVoltage();
+	}
+
+	/**
+	 * Calculates battery-adjusted RPM for a given target RPM.
+	 *
+	 * @param targetRPM Desired target RPM.
+	 * @return Adjusted RPM based on nominal and current battery voltage.
+	 */
+	public double getBatteryAdjustedRPM (double targetRPM)
+	{
+		double voltage = getVoltage();
+		if (voltage <= 0)
+		{
+			return targetRPM;
+		}
+		return targetRPM * (NOMINAL_VOLTAGE / voltage);
+	}
+
+	/**
+	 * Calculates battery-adjusted RPM for the default {@link #TARGET_RPM}.
+	 *
+	 * @return Adjusted RPM.
+	 */
+	public double getBatteryAdjustedRPM ()
+	{
+		return getBatteryAdjustedRPM(TARGET_RPM);
 	}
 
 	/**
@@ -439,7 +501,18 @@ public class Explosher
 			return null;
 		}
 
-		Pose pose = PurpleMemory.Instance.curPose();
+		Pose pose;
+
+		try
+		{
+			pose = PurpleMemory.Instance.curPose();
+		}
+		catch(Exception e)
+		{
+			DebugUtil.logAdd(e.getMessage());
+			pose = new Pose(0,0,0);
+		}
+
 		if (pose == null)
 		{
 			return null;
@@ -452,6 +525,9 @@ public class Explosher
 
 	private void updateShooterPower ()
 	{
+		double voltage = getVoltage();
+		double voltageScale = (voltage > 0) ? (NOMINAL_VOLTAGE / voltage) : 1.0;
+
 		if (Math.abs(targetRPM1) < RPM_STOP_DEADBAND)
 		{
 			motor.setPower(0.0);
@@ -460,7 +536,7 @@ public class Explosher
 		{
 			double currentRPM1 = motor.getCurrentRPM();
 			double rpmError1 = targetRPM1 - currentRPM1;
-			double feedforwardPower1 = (SHOOTER_KV * targetRPM1) + Math.copySign(SHOOTER_KS, targetRPM1);
+			double feedforwardPower1 = ((SHOOTER_KV * targetRPM1) + Math.copySign(SHOOTER_KS, targetRPM1)) * voltageScale;
 			double correctionPower1 = SHOOTER_KP * rpmError1;
 			double commandedPower1 = MathUtil.clamp(feedforwardPower1 + correctionPower1, -1.0, 1.0);
 			motor.setPower(commandedPower1);
@@ -474,7 +550,7 @@ public class Explosher
 		{
 			double currentRPM2 = motor2.getCurrentRPM();
 			double rpmError2 = targetRPM2 - currentRPM2;
-			double feedforwardPower2 = (SHOOTER_KV * targetRPM2) + Math.copySign(SHOOTER_KS, targetRPM2);
+			double feedforwardPower2 = ((SHOOTER_KV * targetRPM2) + Math.copySign(SHOOTER_KS, targetRPM2)) * voltageScale;
 			double correctionPower2 = SHOOTER_KP * rpmError2;
 			double commandedPower2 = MathUtil.clamp(feedforwardPower2 + correctionPower2, -1.0, 1.0);
 			motor2.setPower(commandedPower2);

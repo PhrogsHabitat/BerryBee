@@ -1,3 +1,4 @@
+// PurplePathing.java
 package org.firstinspires.ftc.teamcode.Purple.Pathing;
 
 import com.pedropathing.follower.Follower;
@@ -7,13 +8,13 @@ public class PurplePathing
 {
 	private final Follower follower;
 
-	private final ElapsedTime pathTimer = new ElapsedTime();
+	// Only need a wait timer now — no more duration/path timer.
 	private final ElapsedTime waitTimer = new ElapsedTime();
 
-	// single path control
+	// single-path control
 	private PurplePath currentPath = null;
-	private boolean pathActive = false;
-	private boolean waitingAfterPath = false;
+	private boolean pathActive = false;      // actively following the path
+	private boolean waitingAfterPath = false; // path done, waiting waitTimeSec
 	private boolean currentHoldEnd = true;
 
 	// chain control
@@ -22,25 +23,16 @@ public class PurplePathing
 	private Runnable chainOnComplete = null;
 	private boolean chainActive = false;
 
-	/**
-	 * Construct the manager with a Pedro Follower instance.
-	 *
-	 * @param follower Pedro Follower (created using your Constants.createFollower)
-	 */
 	public PurplePathing (Follower follower)
 	{
 		this.follower = follower;
-		this.pathTimer.reset();
 		this.waitTimer.reset();
 	}
 
 	/**
 	 * Start following a single PurplePath.
-	 * The provided path's onComplete callback will be invoked **after the path
-	 * completes (or times out) and its configured waitTime has elapsed**.
-	 *
-	 * @param path    the PurplePath to follow
-	 * @param holdEnd whether to hold the drivetrain at the end of the path
+	 * onComplete fires as soon as the follower actually finishes the path.
+	 * After that, we wait waitTimeSec before considering the path "over".
 	 */
 	public void followPath (PurplePath path, boolean holdEnd)
 	{
@@ -48,19 +40,11 @@ public class PurplePathing
 		currentChain = null;
 		chainActive = false;
 		chainOnComplete = null;
+		currentChainIndex = 0;
 
 		startPathInternal(path, holdEnd);
 	}
 
-	/**
-	 * Start a PurpleChain. The chain's paths are executed in order. After each path finishes
-	 * the manager waits the configured waitTime before invoking that path's onComplete and
-	 * then starting the next path. When the chain finishes, chainOnComplete runs.
-	 *
-	 * @param chain           the PurpleChain to run
-	 * @param holdEnd         whether each path should be started with holdEnd
-	 * @param chainOnComplete optional runnable to run when the entire chain completes
-	 */
 	public void startChain (PurpleChain chain, boolean holdEnd, Runnable chainOnComplete)
 	{
 		if (chain == null || chain.getPaths().isEmpty()) return;
@@ -71,73 +55,67 @@ public class PurplePathing
 		this.chainActive = true;
 		this.currentHoldEnd = holdEnd;
 
-		// start first
 		startPathInternal(chain.getPaths().get(0), holdEnd);
 	}
 
-	/**
-	 * Must be called inside the OpMode loop() on every iteration.
-	 * This updates the follower and handles completion, timeouts, wait timers and chain advancement.
-	 */
 	public void update ()
 	{
-		// keep Pedro updated (important)
+		// keep Pedro updated
 		follower.update();
 
-		if (pathActive && currentPath != null)
+		if (currentPath == null) return;
+
+		if (pathActive)
 		{
-			double elapsed = pathTimer.seconds(); // CHANGED: was getElapsedTimeSeconds()
-			if (elapsed >= currentPath.getDurationSec())
+			// Ask Pedro whether the path is done.
+			//  - !isBusy():        path finished without holdEnd
+			//  - atParametricEnd(): path hit its endpoint (works with holdEnd=true)
+			if (!follower.isBusy() || follower.atParametricEnd())
 			{
 				pathActive = false;
 				waitingAfterPath = true;
-				waitTimer.reset(); // CHANGED: was resetTimer()
+				waitTimer.reset();
+
+				// Fire onComplete exactly once, right when the path finishes.
+				currentPath.runOnComplete();
 			}
-		} else if (waitingAfterPath && currentPath != null)
+		}
+		else if (waitingAfterPath)
 		{
-			double waited = waitTimer.seconds(); // CHANGED: was getElapsedTimeSeconds()
-			double waitFor = currentPath.getWaitTimeSec();
-
-			currentPath.runOnComplete();
-
-			if (waited >= waitFor)
+			// Wait waitTimeSec, then advance.
+			if (waitTimer.seconds() >= currentPath.getWaitTimeSec())
 			{
-				// proceed based on whether we're in a chain or a standalone path
+				waitingAfterPath = false;
+
 				if (chainActive && currentChain != null)
 				{
-					// move to the next path in the active chain
-					waitingAfterPath = false;
 					currentChainIndex++;
 
 					if (currentChainIndex >= currentChain.getPaths().size())
 					{
-						// entire chain finished
+						// Entire chain finished.
 						chainActive = false;
 						PurpleChain finishedChain = currentChain;
 						currentChain = null;
 						currentPath = null;
+
 						if (chainOnComplete != null)
 						{
-							try
-							{
-								chainOnComplete.run();
-							} catch (Exception e)
-							{
-								e.printStackTrace();
-							}
+							try { chainOnComplete.run(); }
+							catch (Exception e) { e.printStackTrace(); }
 						}
 						finishedChain.runOnComplete();
-					} else
+					}
+					else
 					{
-						// start the next path in the chain
 						PurplePath next = currentChain.getPaths().get(currentChainIndex);
 						startPathInternal(next, currentHoldEnd);
 					}
-				} else
+				}
+				else
 				{
-					// single path finished; clear currentPath
+					// Standalone path finished.
 					currentPath = null;
-					waitingAfterPath = false;
 				}
 			}
 		}
@@ -148,18 +126,14 @@ public class PurplePathing
 		this.currentPath = path;
 		this.pathActive = true;
 		this.waitingAfterPath = false;
-		this.pathTimer.reset();
 
-		// fire onStart right when the path starts
+		// onStart fires right when we hand the path to Pedro.
 		path.runOnStart();
 
+		follower.holdEnd.set(true);
 		follower.follow(path.getPath());
 	}
 
-	/**
-	 * Return a human-friendly description of the current path (or NONE).
-	 * Includes chain index when a chain is active.
-	 */
 	public String curPath ()
 	{
 		if (currentChain != null && chainActive)
@@ -169,10 +143,12 @@ public class PurplePathing
 					Math.min(currentChainIndex + 1, currentChain.getPaths().size()),
 					currentChain.getPaths().size(),
 					name);
-		} else if (currentPath != null)
+		}
+		else if (currentPath != null)
 		{
 			return currentPath.getName();
-		} else
+		}
+		else
 		{
 			return "NONE";
 		}

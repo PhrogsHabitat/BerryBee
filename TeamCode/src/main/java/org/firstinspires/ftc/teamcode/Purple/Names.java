@@ -21,6 +21,7 @@ public final class Names
 
 
 	// Sensor names
+
 	public static final String LIME = "SwagLime";
 
 	private Names ()

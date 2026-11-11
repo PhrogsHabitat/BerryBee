@@ -1,12 +1,13 @@
 package org.firstinspires.ftc.teamcode.Purple;
 
+import com.arcrobotics.ftclib.hardware.motors.Motor;
 import com.bylazar.configurables.annotations.Configurable;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.follower.ManualDrive;
 import com.pedropathing.math.Pose;
-import com.pedropathing.paths.Path;
 
 import org.firstinspires.ftc.teamcode.Purple.Components.Explosher.Explosher;
+import org.firstinspires.ftc.teamcode.Purple.Components.Motors.MotorConfig;
 import org.firstinspires.ftc.teamcode.Purple.Components.OpMode.PurpleOpMode;
 import org.firstinspires.ftc.teamcode.Purple.Components.Vaccum.Vaccum;
 import org.firstinspires.ftc.teamcode.Purple.Memory.PurpleMemory;
@@ -18,17 +19,25 @@ import com.bylazar.telemetry.TelemetryManager;
 import com.bylazar.field.FieldManager;
 import com.bylazar.field.PanelsField;
 import com.bylazar.field.Style;
+import com.qualcomm.robotcore.util.ElapsedTime;
 
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
 
 import static com.pedropathing.api.Paths.line;
 
-@com.qualcomm.robotcore.eventloop.opmode.TeleOp(
-		name = "PurpleTeleOp",
-		group = "Purple"
-)
+@com.qualcomm.robotcore.eventloop.opmode.TeleOp(name = "PurpleTeleOp", group = "Purple")
 @Configurable
 public class TeleOp extends PurpleOpMode
 {
+
+	// Spinup timer and tracking
+	private final ElapsedTime explosherSpinupTimer = new ElapsedTime();
+	private boolean wasExplosherSpinning = false;
+	private boolean wasSnapArrived = false;
+	private boolean wasDriver2StickUp = false;
+	private boolean wasDriver2StickDown = false;
 
 	public static Pose startingPose;
 
@@ -43,38 +52,54 @@ public class TeleOp extends PurpleOpMode
 	public double debugBlockerPos = 0.5;
 	public double debugFlickerPos = 0.5;
 
+	public boolean fallback = false;
+
 	private Controls driver1;
 	private Controls driver2;
+
+	public MotorConfig fr;
+	public MotorConfig fl;
+	public MotorConfig br;
+	public MotorConfig bl;
 
 	private Follower follower;
 	private Vaccum vaccum;
 	private Explosher explosher;
 
 	public static double SNAP_RANGE = 20.0;
+	public static boolean FIELD_CENTRIC = false;
+
+	public Pose prevPose;
+
+	// Pose persistence
+	private final ElapsedTime saveTimer = new ElapsedTime();
+	private static final long SAVE_INTERVAL_MS = 1000;
+
+	// Zero-combo state
+	private boolean zeroing = false;
 
 	public static Pose[] POLLEN_SNAP_POINTS =
 	{
 			// Behind
-			new Pose(65, 10, Math.toRadians(270)),
+			new Pose(65, 11, Math.toRadians(270)),
 
 			// In Front
 			new Pose(48, 124, Math.toRadians(90)),
 
 			// Behind Diagonal
-			new Pose(35.5, 19, Math.toRadians(230)),
+			new Pose(37, 19, Math.toRadians(230)),
 
 			// In Front Diagonal
-			new Pose(32, 122, Math.toRadians(123)),
-
+			new Pose(32, 122, Math.toRadians(120)),
 	};
 
 	public static Pose[] NECTAR_SNAP_POINTS =
 	{
 			// Behind
-			new Pose(52, 10, Math.toRadians(270)),
+			new Pose(52, 11, Math.toRadians(270)),
 
 			// In Front
-			new Pose(70, 135, Math.toRadians(90)),
+			new Pose(65, 130, Math.toRadians(90)),
 
 			// Behind Diagonal
 			new Pose(21.5, 24, Math.toRadians(230)),
@@ -83,22 +108,14 @@ public class TeleOp extends PurpleOpMode
 			new Pose(39, 125, Math.toRadians(128)),
 	};
 
-
-	// RPM pair per zone. Index matches POLLEN_SNAP_POINTS / NECTAR_SNAP_POINTS.
-	// (pollen[i] and nectar[i] share the same zone, so they share the same RPMs.)
-	public static double[] SNAP_RPM_1 = { 2900, 2900, 3000, 3100};
-	public static double[] SNAP_RPM_2 = { 2900, 2900, 3000, 3100};
-
 	private boolean snapActive = false;
 	private boolean isPollenSnap = false;
 	private Pose activeSnapPoint = null;
-	private int currentZone = 0;
 
-	private static final FieldManager panelsField =
-			PanelsField.INSTANCE.getField();
+	private static final FieldManager panelsField = PanelsField.INSTANCE.getField();
+	private final TelemetryManager panelsTelemetry = PanelsTelemetry.INSTANCE.getTelemetry();
 
-	private static final Style robotStyle =
-			new Style("", "#3F51B5", 2.0);
+	private static final Style robotStyle = new Style("", "#3F51B5", 2.0);
 
 	private static final double ROBOT_RADIUS = 9.0;
 
@@ -108,12 +125,25 @@ public class TeleOp extends PurpleOpMode
 		driver1 = new Controls(gamepad1);
 		driver2 = new Controls(gamepad2);
 
+		// Manual Drive Powers
+		fr = new MotorConfig.Builder(hardwareMap, Names.FRONTRIGHT, MotorConfig.Position.EXPLOSHER, 415.2, 1620).zeroPowerBehavior(Motor.ZeroPowerBehavior.BRAKE)
+				.build();
+
+		fl = new MotorConfig.Builder(hardwareMap, Names.FRONTLEFT, MotorConfig.Position.EXPLOSHER, 415.2, 1620).zeroPowerBehavior(Motor.ZeroPowerBehavior.BRAKE)
+				.inverted()
+				.build();
+
+		br = new MotorConfig.Builder(hardwareMap, Names.BACKRIGHT, MotorConfig.Position.EXPLOSHER, 415.2, 1620).zeroPowerBehavior(Motor.ZeroPowerBehavior.BRAKE)
+				.build();
+
+		bl = new MotorConfig.Builder(hardwareMap, Names.BACKLEFT, MotorConfig.Position.EXPLOSHER, 415.2, 1620).zeroPowerBehavior(Motor.ZeroPowerBehavior.BRAKE)
+				.inverted()
+				.build();
+
+
 		follower = org.firstinspires.ftc.teamcode.pedro.Constants.create(hardwareMap);
 
 		PurpleMemory.initialize(hardwareMap, follower);
-
-//		Pose prevPose = new Pose(Integer.parseInt(PurpleMemory.Instance.persist().get("PrevX")), Integer.parseInt(PurpleMemory.Instance.persist().get("PrevY")), Integer.parseInt(PurpleMemory.Instance.persist().get("PrevHeading")));
-		follower.setPose(new Pose(9.5, 9.5, Math.toRadians(90)));
 
 		vaccum = new Vaccum(hardwareMap);
 		explosher = new Explosher(hardwareMap);
@@ -125,6 +155,26 @@ public class TeleOp extends PurpleOpMode
 		}
 
 		DebugUtil.setTelemetry(telemetry);
+
+		try
+		{
+			prevPose = new Pose(
+					Double.parseDouble(PurpleMemory.Instance.persist().get("PrevX", "0")),
+					Double.parseDouble(PurpleMemory.Instance.persist().get("PrevY", "0")),
+					Math.toRadians(Double.parseDouble(PurpleMemory.Instance.persist().get("PrevHeading", "0")))
+			);
+
+//			follower.setPose(new Pose(prevPose.x(), prevPose.y(), prevPose.heading()));
+			follower.setPose(new Pose(14, 90, Math.toRadians(180)));
+
+		}
+		catch(Exception e)
+		{
+			DebugUtil.logAdd(e.getMessage());
+			follower.setPose(new Pose(14, 90, Math.toRadians(180)));
+		}
+
+		saveTimer.reset();
 	}
 
 	@Override
@@ -138,11 +188,19 @@ public class TeleOp extends PurpleOpMode
 		vaccum.update();
 		explosher.update();
 
-		updateDrive();
+		// Handle switching to fallback controls
+		if (!fallback)
+		{
+			updateDrive();
+			follower.update();
+		}
+		else
+		{
+			updateFallbackDrive();
+		}
+
 		updateVaccum();
 		updateExplosher();
-
-		follower.update();
 
 		updateTelemetry();
 		updatePanelsTelemetry();
@@ -152,6 +210,9 @@ public class TeleOp extends PurpleOpMode
 	@Override
 	public void destroy()
 	{
+		// Persist the current pose before shutting anything down.
+		savePose();
+
 		if (follower != null)
 		{
 			follower.stop();
@@ -173,14 +234,54 @@ public class TeleOp extends PurpleOpMode
 		boolean rightBumperDown = driver1.isPressed("right_bumper");
 		boolean leftBumperDown = driver1.isPressed("left_bumper");
 
+		boolean fallbackCombo = driver1.isPressed("y") && driver1.isPressed("start") && driver1.isPressed("right_bumper");
+		boolean zeroCombo = driver1.isPressed("y") && driver1.isPressed("start") && !driver1.isPressed("right_bumper");
+
+		if (fallbackCombo)
+		{
+			fallback = true;
+			return;
+		}
+
+		if (zeroCombo)
+		{
+			if (!zeroing)
+			{
+				// Cancel any active snap.
+				snapActive = false;
+				activeSnapPoint = null;
+				isPollenSnap = false;
+
+				// Clear the latched hold target, reset the pose, and re-latch
+				// the hold at the new origin so driveOrHold has nothing to chase.
+				follower.stop();
+				follower.setPose(new Pose(10, 132, 270));
+				follower.hold(new Pose(10, 132, 270));
+				zeroing = true;
+			}
+
+			// While the combo is held, keep the hold target pinned to origin
+			// and skip driveOrHold entirely.
+			follower.hold(new Pose(0, 0, 0));
+			return;
+		}
+
+		if (zeroing)
+		{
+			// Input so it drops any internally-latched hold target
+			zeroing = false;
+			ManualDrive.driveOrHold(follower, 0.05, 0.05, 0.05);
+			return;
+		}
+
 		// Only start a new snap if one isn't already running.
 		if (!snapActive)
 		{
-			if (driver1.justPressed("right_bumper"))
+			if (driver1.justPressed("left_bumper"))
 			{
 				startSnap(POLLEN_SNAP_POINTS, true);
 			}
-			else if (driver1.justPressed("left_bumper"))
+			else if (driver1.justPressed("right_bumper"))
 			{
 				startSnap(NECTAR_SNAP_POINTS, false);
 			}
@@ -188,7 +289,14 @@ public class TeleOp extends PurpleOpMode
 
 		if (snapActive)
 		{
-			boolean holding = isPollenSnap ? rightBumperDown : leftBumperDown;
+			boolean snapArrived = !follower.isBusy();
+			if (snapArrived && !wasSnapArrived)
+			{
+				driver1.vibrate(500);
+			}
+			wasSnapArrived = snapArrived;
+
+			boolean holding = isPollenSnap ? leftBumperDown : rightBumperDown;
 
 			if (holding)
 			{
@@ -199,18 +307,79 @@ public class TeleOp extends PurpleOpMode
 			activeSnapPoint = null;
 			snapActive = false;
 			isPollenSnap = false;
+			wasSnapArrived = false;
+		}
+		else
+		{
+			wasSnapArrived = false;
 		}
 
-		double forward = -gamepad1.left_stick_y * Constants.DRIVE_POWER_SCALE;
-		double strafe = -gamepad1.left_stick_x * Constants.DRIVE_POWER_SCALE;
+		double rawForward = -gamepad1.left_stick_y;
+		double rawStrafe = -gamepad1.left_stick_x;
 		double turn = -gamepad1.right_stick_x * Constants.DRIVE_POWER_SCALE;
 
+		double forward;
+		double strafe;
+
+		if (FIELD_CENTRIC)
+		{
+			Pose currentPose = follower.pose();
+			if (currentPose != null)
+			{
+				double heading = currentPose.heading();
+				forward = rawForward * Math.cos(heading) + rawStrafe * Math.sin(heading);
+				strafe = -rawForward * Math.sin(heading) + rawStrafe * Math.cos(heading);
+			}
+			else
+			{
+				forward = rawForward;
+				strafe = rawStrafe;
+			}
+		}
+		else
+		{
+			forward = rawForward;
+			strafe = rawStrafe;
+		}
+
+		forward *= Constants.DRIVE_POWER_SCALE;
+		strafe *= Constants.DRIVE_POWER_SCALE;
+
 		ManualDrive.driveOrHold(follower, forward, strafe, turn);
+	}
+
+	private void updateFallbackDrive()
+	{
+
+		double rawForward = -gamepad1.left_stick_y;
+		double rawStrafe = gamepad1.left_stick_x;
+		double turn = gamepad1.right_stick_x * Constants.DRIVE_POWER_SCALE;
+
+		double forward = rawForward;
+		double strafe = rawStrafe;
+
+		forward *= Constants.DRIVE_POWER_SCALE;
+		strafe *= Constants.DRIVE_POWER_SCALE;
+
+		double flPower  = forward + strafe + turn;
+		double frPower = forward - strafe - turn;
+		double blPower   = forward - strafe + turn;
+		double brPower  = forward + strafe - turn;
+
+		fl.setPower(flPower);
+		fr.setPower(frPower);
+		bl.setPower(blPower);
+		br.setPower(brPower);
+
 	}
 
 	private void startSnap(Pose[] points, boolean pollen)
 	{
 		Pose currentPose = follower.pose();
+		if (currentPose == null)
+		{
+			return;
+		}
 
 		Pose best = null;
 		double bestDist = Double.MAX_VALUE;
@@ -233,39 +402,33 @@ public class TeleOp extends PurpleOpMode
 			return;
 		}
 
-		Path snapPath = line(currentPose, best).linear(currentPose, best);
-
-		follower.follow(snapPath);
+		follower.hold(best);
 
 		activeSnapPoint = best;
 		snapActive = true;
 		isPollenSnap = pollen;
 	}
 
-	private int getClosestZone()
+	private void savePose()
 	{
-		Pose currentPose = follower.pose();
-
-		int bestIdx = 0;
-		double bestDist = Double.MAX_VALUE;
-
-		for (int i = 0; i < POLLEN_SNAP_POINTS.length; i++)
+		if (follower == null || PurpleMemory.Instance == null
+				|| PurpleMemory.Instance.persist() == null)
 		{
-			Pose p = POLLEN_SNAP_POINTS[i];
-			Pose n = NECTAR_SNAP_POINTS[i];
-
-			double dp = Math.hypot(p.x() - currentPose.x(), p.y() - currentPose.y());
-			double dn = Math.hypot(n.x() - currentPose.x(), n.y() - currentPose.y());
-			double d = Math.min(dp, dn);
-
-			if (d < bestDist)
-			{
-				bestDist = d;
-				bestIdx = i;
-			}
+			return;
 		}
 
-		return bestIdx;
+		Pose p = follower.pose();
+		if (p == null)
+		{
+			return;
+		}
+
+		// Batched so X/Y/Heading are written in a single atomic transaction.
+		Map<String, String> values = new HashMap<>();
+		values.put("PrevX", String.valueOf(p.x()));
+		values.put("PrevY", String.valueOf(p.y()));
+		values.put("PrevHeading", String.valueOf(Math.toDegrees(p.heading())));
+		PurpleMemory.Instance.persist().setAll(values);
 	}
 
 	private void updateVaccum()
@@ -276,7 +439,7 @@ public class TeleOp extends PurpleOpMode
 		}
 		else if (driver2.isPressed("x"))
 		{
-			vaccum.setPower(-0.45);
+			vaccum.setPower(-0.35);
 		}
 		else
 		{
@@ -288,49 +451,102 @@ public class TeleOp extends PurpleOpMode
 	{
 		explosher.setRegressionEnabled(false);
 
-		// Recompute every frame so telemetry (and the auto-RPM below) always reflect truth.
-		currentZone = getClosestZone();
-
 		if (Constants.DEBUG_MODE)
 		{
 			updateExplosherDebug();
 			return;
 		}
 
-		// Always spin both motors up to the RPM pair of the closest snap zone.
-		if (driver2.getRightStickY() > 0.5)
+		// Spin motors to target RPM with vibration on initial push.
+		double rightStickY = driver2.getRightStickY();
+		boolean stickUp = rightStickY > 0.5;
+		boolean stickDown = rightStickY < -0.5;
+
+		if (stickUp && !wasDriver2StickUp)
 		{
-			explosher.setRPM(1, SNAP_RPM_1[currentZone]);
-			explosher.setRPM(2, SNAP_RPM_2[currentZone]);
+			driver2.vibrate(250);
+			explosher.setRPM(Explosher.TARGET_RPM);
 		}
-		else if (driver2.getRightStickY() < -0.5)
+		else if (stickDown && !wasDriver2StickDown)
 		{
-			explosher.setRPM(1, -2900);
-			explosher.setRPM(2, -2900);
+			driver2.vibrate(250);
+			explosher.setRPM(-Explosher.TARGET_RPM);
+		}
+		else if (!stickUp && !stickDown)
+		{
+			explosher.setRPM(0);
 		}
 		else
 		{
-			explosher.setRPM(1, 0);
-			explosher.setRPM(2, 0);
+			if (stickUp)
+			{
+				explosher.setRPM(Explosher.TARGET_RPM);
+			}
+			else
+			{
+				explosher.setRPM(-Explosher.TARGET_RPM);
+			}
 		}
 
-		boolean snapArrived = snapActive && !follower.following();
+		wasDriver2StickUp = stickUp;
+		wasDriver2StickDown = stickDown;
 
-		boolean blockerStop =
-				driver2.isPressed("right_trigger")
-						&& (snapArrived && isPollenSnap);
+		boolean isSpinning = Math.abs(explosher.getTargetRPM()) > 10.0;
+		if (isSpinning)
+		{
+			if (!wasExplosherSpinning)
+			{
+				explosherSpinupTimer.reset();
+				wasExplosherSpinning = true;
+			}
+		}
+		else
+		{
+			wasExplosherSpinning = false;
+			explosherSpinupTimer.reset();
+		}
 
-		boolean flickerStop =
-				driver2.isPressed("right_trigger")
-						&& (snapArrived && !isPollenSnap);
+		boolean explosherReady = wasExplosherSpinning && (explosherSpinupTimer.seconds() >= 2.0);
+
+		boolean rightTriggerPressed = driver2.isPressed("right_trigger");
+
+		if (driver2.justPressed("right_trigger"))
+		{
+			driver2.vibrate(10);
+		}
+
+		boolean snapArrived = snapActive && !follower.isBusy();
+
+		boolean blockerStop;
+		boolean flickerStop;
+
+		if (!fallback)
+		{
+			blockerStop =
+					rightTriggerPressed
+							&& explosherReady
+							&& (snapArrived && isPollenSnap);
+
+			flickerStop =
+					rightTriggerPressed
+							&& explosherReady
+							&& (snapArrived && !isPollenSnap);
+		}
+		else
+		{
+			blockerStop = driver2.isPressed("left_bumper");
+			flickerStop = driver2.isPressed("right_bumper");
+		}
+
+		boolean forceOut = driver2.isPressed("left_trigger");
 
 		explosher.setGateState(
 				Explosher.BLOCKER,
-				blockerStop ? Explosher.GateState.STOP : Explosher.GateState.PASS
+				forceOut ? Explosher.GateState.STOP : blockerStop ? Explosher.GateState.STOP : Explosher.GateState.PASS
 		);
 		explosher.setGateState(
 				Explosher.FLICKER,
-				flickerStop ? Explosher.GateState.STOP : Explosher.GateState.PASS
+				forceOut ? Explosher.GateState.STOP : flickerStop ? Explosher.GateState.STOP : Explosher.GateState.PASS
 		);
 	}
 
@@ -387,14 +603,35 @@ public class TeleOp extends PurpleOpMode
 	{
 		Pose pose = follower.pose();
 
-		DebugUtil.logAdd("[FOLLOWER] POSE: " + pose.x() + ", " + pose.y() + ", " + Math.toDegrees(pose.heading()));
+		try
+		{
+			DebugUtil.logAdd("[PREV SWAG] " + prevPose.x() + ", " + prevPose.y() + ", " + prevPose.heading());
+		}
+		catch (Exception e)
+		{
+			DebugUtil.logAdd(e.getMessage());
+		}
+
+		DebugUtil.logAdd(" ");
+		DebugUtil.logAdd("[VOLTAGE] " + explosher.getVoltage());
+
+		if (pose != null)
+		{
+			DebugUtil.logAdd("[FOLLOWER] POSE: " + pose.x() + ", " + pose.y() + ", " + Math.toDegrees(pose.heading()));
+		}
+		else
+		{
+			DebugUtil.logAdd("[FOLLOWER] POSE: null");
+		}
+
 		DebugUtil.logAdd("[SNAP] ACTIVE: " + snapActive);
 		DebugUtil.logAdd("[SNAP] TYPE: " + (snapActive ? (isPollenSnap ? "POLLEN" : "NECTAR") : "NONE"));
 		DebugUtil.logAdd("[SNAP] TARGET: " + activeSnapPoint);
 		DebugUtil.logAdd("[SNAP] RANGE: " + SNAP_RANGE);
 		DebugUtil.logAdd("[SNAP] FOLLOWING: " + follower.following());
+		DebugUtil.logAdd("[ZERO] ACTIVE: " + zeroing);
 
-		DebugUtil.logAdd("[ZONE] " + currentZone + " -> RPM1=" + SNAP_RPM_1[currentZone] + " RPM2=" + SNAP_RPM_2[currentZone]);
+		DebugUtil.logAdd("[BATTERY RPM] TARGET=" + String.format(Locale.US, "%.1f", explosher.getBatteryAdjustedRPM()) + " (BASE=" + Explosher.TARGET_RPM + ", VOLTAGE=" + String.format(Locale.US, "%.2f", explosher.getVoltage()) + "V)");
 
 		if (Constants.DEBUG_MODE)
 		{
@@ -407,7 +644,6 @@ public class TeleOp extends PurpleOpMode
 		}
 	}
 
-	private final TelemetryManager panelsTelemetry = PanelsTelemetry.INSTANCE.getTelemetry();
 
 	private void updatePanelsTelemetry()
 	{
